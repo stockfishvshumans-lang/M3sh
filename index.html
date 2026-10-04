@@ -3,7 +3,7 @@
     <html lang="en">
 
     <head>
-    <link rel="icon" href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=">
+    <link rel="icon" href="./favicon.ico">
 
         <meta charset="UTF-8">
 
@@ -18,7 +18,7 @@
         
 
         <script>
-    window._fakeSocket = { on:()=>{}, off:()=>{}, emit:()=>{}, connected:false, _fake:true };
+    window._fakeSocket = { on:function(){}, off:function(){}, emit:function(){}, connected:false, _fake:true };
     window.io = window.io || function(){ return window._fakeSocket; };
     </script>
     <script src="/socket.io/socket.io.js" onerror="console.warn('socket.io 404 - solo mode')"></script>
@@ -29,16 +29,9 @@
 
         <link rel="stylesheet" href="style.css">
 
-    
-<style>
-/* FIX: Hologram buttons clickable - minimal override, does not delete original */
-#ui-layer { pointer-events: none !important; z-index: 50 !important; }
-#hud-bottom, .command-console, .console-wing, .console-core, #side-feed, #virtual-numpad, #boss-hud { pointer-events: auto !important; z-index: 60 !important; position: relative !important; }
-.tactical-btn, .trigger-btn, .num-btn { pointer-events: auto !important; cursor: pointer !important; z-index: 70 !important; }
-#gameCanvas { z-index: 1 !important; }
-#start-countdown.hidden { display: none !important; }
-</style>
-
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 
     <body>
@@ -208,7 +201,6 @@
 
 
         <div id="game-wrapper">
-            <div id="game-wrapper-inner">
 
             <div id="vr-grid-bg"></div>
 

@@ -14958,3 +14958,42 @@ body.dashboard-active #teacher-dashboard:not(.hidden) {
     border-radius: 4px;
     font-family: 'Rajdhani', sans-serif;
 }
+
+
+/* === FIX: HOLOGRAM CLICKABLE + FREEZE FIX - Added at end, does not delete original === */
+#game-wrapper {
+    perspective: none !important;
+    transform-style: flat !important;
+    overflow: visible !important;
+}
+#ui-layer {
+    pointer-events: none !important;
+    z-index: 50 !important;
+}
+#hud-top, #hud-bottom, .command-console, .console-wing, .console-core, #side-feed, #virtual-numpad, #boss-hud, #input-container, #comms-wrapper, #jessbot-wrapper {
+    pointer-events: auto !important;
+    z-index: 100 !important;
+    position: relative !important;
+}
+.tactical-btn, .trigger-btn, .num-btn, #player-input {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    z-index: 150 !important;
+    position: relative !important;
+}
+#gameCanvas {
+    z-index: 1 !important;
+}
+#start-countdown.hidden, #curtain-countdown.hidden, #class-curtain.hidden {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+#glitch-overlay {
+    display: none !important;
+    pointer-events: none !important;
+}
+.modal {
+    z-index: 99999 !important;
+    pointer-events: auto !important;
+}

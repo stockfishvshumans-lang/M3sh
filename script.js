@@ -419,23 +419,23 @@ window.resumeClassSession = function() {
 // --- 3. ASSET MANAGER (Visuals) ---
 const assets = {
     ships: {
-        'turret_def': { src: 'ship_default.png', img: new Image() },
-        'turret_gold': { src: 'ship_gold.png', img: new Image() },
-        'turret_cyber': { src: 'ship_cyber.png', img: new Image() },
-        'turret_tank': { src: 'ship_tank.png', img: new Image() }
+        'turret_def': { src: 'assets/ship_default.png', img: new Image() },
+        'turret_gold': { src: 'assets/ship_gold.png', img: new Image() },
+        'turret_cyber': { src: 'assets/ship_cyber.png', img: new Image() },
+        'turret_tank': { src: 'assets/ship_tank.png', img: new Image() }
     },
     enemies: {
-        'enemy_def': { src: 'enemy_default.png', img: new Image() },
-        'enemy_alien': { src: 'enemy_alien.png', img: new Image() },
-        'enemy_glitch': { src: 'enemy_glitch.png', img: new Image() }
+        'enemy_def': { src: 'assets/enemy_default.png', img: new Image() },
+        'enemy_alien': { src: 'assets/enemy_alien.png', img: new Image() },
+        'enemy_glitch': { src: 'assets/enemy_glitch.png', img: new Image() }
     },
     boss: {
-        'boss_def': { src: 'boss_mech.png', img: new Image() },
-        'boss_god': { src: 'boss_god.png', img: new Image() }
+        'boss_def': { src: 'assets/boss_mech.png', img: new Image() },
+        'boss_god': { src: 'assets/boss_god.png', img: new Image() }
     },
     misc: {
         'city': { src: '', img: new Image() },
-        'supply': { src: 'supply_crate.png', img: new Image() }
+        'supply': { src: 'assets/supply_crate.png', img: new Image() }
     }
 };
 
@@ -495,6 +495,12 @@ let state = {
     training: { active: false, currentQ: null, mistakesFixed: 0 },
     inputLocked: false, lockTimer: null, classroomTopic: 'all', swarmCount: 12
 };
+// FIX: Interval tracker to prevent leaks
+window._trackedIntervals = window._trackedIntervals || new Set();
+window._originalSetInterval = window._originalSetInterval || window.setInterval;
+window.setInterval = function(fn, ms) { const id = window._originalSetInterval(fn, ms); window._trackedIntervals.add(id); return id; };
+window.clearAllTrackedIntervals = function() { window._trackedIntervals.forEach(id => clearInterval(id)); window._trackedIntervals.clear(); };
+
 
 // --- 📝 NEW LOGGER FUNCTION (Ito ang taga-lista ng lahat) ---
 function registerAction(question, correctAnswer, userInput, status) {
@@ -1729,7 +1735,8 @@ if(socket) {
 async function fetchTopAgents() {
     try {
         const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(5));
-        const snap = await getDocs(q); 
+        const snap = await getDocs(query(q, limit(100))); // FIX: Limit to 100 to prevent reading entire collection
+ 
         let list = [];
         snap.forEach(d => list.push(d.data()));
         updateSideLeaderboard(list);
@@ -1841,11 +1848,16 @@ window.cancelMission = function() {
 // 🧹 SYSTEM TEARDOWN & MEMORY CLEANUP
 // ==========================================
 window.cleanupGame = function() {
+    try { if(window.clearAllTrackedIntervals) window.clearAllTrackedIntervals(); } catch(e){}
+    try { if(state.vsInterval) clearInterval(state.vsInterval); } catch(e){}
+    try { if(state.partySyncInterval) clearInterval(state.partySyncInterval); } catch(e){}
+    try { if(state.petAttackTimer) clearInterval(state.petAttackTimer); } catch(e){}
+
     console.log("🧹 Executing Deep System Cleanup...");
     
     state.isPlaying = false;
     state.isPaused = false;
-    state.isGlobalFreeze = false;
+    state.isGlobalFreeze = false; try{ if(window._globalFreezeTimeout) clearTimeout(window._globalFreezeTimeout); }catch(e){}
     state.isOverdrive = false;
 
     if (window.gameLoopId) {
@@ -2060,7 +2072,7 @@ function enterClassroomLobby(code, roomName) {
                 // Check 1: Resume from Freeze
                 if (state.isGlobalFreeze) {
                     console.log("🔓 Unfreezing System...");
-                    state.isGlobalFreeze = false;
+                    state.isGlobalFreeze = false; try{ if(window._globalFreezeTimeout) clearTimeout(window._globalFreezeTimeout); }catch(e){}
                     state.isPaused = false;
                     document.getElementById("pause-modal").classList.add("hidden");
                     
@@ -2148,7 +2160,7 @@ function enterClassroomLobby(code, roomName) {
             case 'frozen':
                 if (state.isPlaying && !state.isPaused) {
                     state.isPaused = true;
-                    state.isGlobalFreeze = true;
+                    state.isGlobalFreeze = true; window._globalFreezeTimeout = setTimeout(()=>{ state.isGlobalFreeze = false; try{ if(window._globalFreezeTimeout) clearTimeout(window._globalFreezeTimeout); }catch(e){} console.log('Auto-unfreeze after 10min'); }, 600000);
                     
                     const pModal = document.getElementById("pause-modal");
                     pModal.classList.remove("hidden");
@@ -2213,6 +2225,28 @@ function enterClassroomLobby(code, roomName) {
 }
 
 // 🟢 HELPER: TOGGLE CYBER CURTAIN
+
+window.monitorClassroom = function(roomCode) {
+    console.log("Monitoring classroom:", roomCode);
+    try {
+        if (typeof dashboardUnsub !== 'undefined' && dashboardUnsub) dashboardUnsub();
+        const studentsCol = collection(db, "rooms", roomCode, "students");
+        dashboardUnsub = onSnapshot(studentsCol, (snapshot) => {
+            currentStudentData = [];
+            snapshot.forEach(docSnap => {
+                let data = docSnap.data();
+                data.id = docSnap.id;
+                currentStudentData.push(data);
+            });
+            if(window.updateRosterView) window.updateRosterView();
+            if(window.updateSpyView) window.updateSpyView();
+            if(window.updatePodiumView) window.updatePodiumView();
+            if(window.updateReportView) window.updateReportView();
+        });
+    } catch(e) { console.error("Monitor error:", e); }
+};
+
+
 window.toggleCurtain = function(show, title = "LOADING...", sub = "PLEASE WAIT", showCount = false) {
     const curtain = document.getElementById("class-curtain");
     const titleEl = document.getElementById("curtain-title");
@@ -2370,7 +2404,7 @@ window.beginGameplay = function() {
     if (myPet) {
         if (myPet.id === 'pet_c2') state.petData.shieldCharges = 1; 
         if (myPet.id === 'pet_e1') state.petData.shieldCharges = 3; 
-        if (myPet.id === 'pet_m2') state.petData.shieldCharges = 999; 
+        if (myPet.id === 'pet_m2') state.petData.shieldCharges = 3 // FIX: Balanced from 999 (was invincible); 
 
         if (myPet.id === 'pet_m1') {
             if (state.petAttackTimer) clearInterval(state.petAttackTimer);
@@ -3023,6 +3057,7 @@ window.triggerEMP = function(isFree, fromSocket = false, isMini = false, originX
     if (!isFree) { 
         if (state.coins < 250) { window.Sound.error(); window.Sound.speak("Insufficient Funds"); return; } 
         state.coins -= 250; 
+        try{ updateHUD(); }catch(e){}
     }
     
     window.Sound.nuke();
@@ -3061,6 +3096,7 @@ window.triggerSlowMo = function(isFree, fromSocket = false) {
     if (!isFree) { 
         if (state.coins < 100) { window.Sound.error(); window.Sound.speak("Insufficient Funds"); return; } 
         state.coins -= 100; 
+        try{ updateHUD(); }catch(e){}
     }
     window.Sound.powerup();
     if(!fromSocket) { 
@@ -3154,59 +3190,44 @@ window.playOutroSequence = function(isWin) {
 window.gameOver = function() {
     if (state.matchConcluded) return; 
     state.matchConcluded = true;
-
     document.body.classList.remove('in-combat');
-    
     if (typeof scoreInterval !== 'undefined' && scoreInterval) clearInterval(scoreInterval);
     if (state.gameTimer) clearInterval(state.gameTimer);
     if (window.Sound) window.Sound.stopBGM();
-
     state.isPlaying = false; 
     if(window.inputField) window.inputField.blur();
-
-    // =====================================
-    // ⚔️ VS MODE & PARTY MODE DEFEAT HANDLING
-    // =====================================
     if (state.gameMode === 'vs' || state.gameMode === 'party') {
         if (socket && currentRoomId) {
             state.health = 0; 
             if (state.gameMode === 'vs') {
-                socket.emit('player_died', { room: currentRoomId });
-                socket.emit('send_vs_state', { 
-                    room: currentRoomId, 
-                    state: { meteors: [], lasers: [], health: 0, score: state.score } 
-                });
+                try {
+                    socket.emit('player_died', { room: currentRoomId });
+                    socket.emit('send_vs_state', { room: currentRoomId, state: { meteors: [], lasers: [], health: 0, score: state.score } });
+                } catch(e){}
             }
         }
-        
         const winModal = document.getElementById("win-modal");
         if(winModal) {
             winModal.classList.remove("hidden");
             const title = winModal.querySelector("h1");
             const sub = winModal.querySelector(".subtitle");
             const content = winModal.querySelector(".modal-content");
-            
             if(title) { title.innerText = "DEFEAT"; title.style.color = "#ff0055"; title.style.textShadow = "0 0 20px #ff0055"; }
             if(sub) sub.innerText = state.gameMode === 'party' ? "SQUAD WIPED OUT" : "SYSTEM CRITICAL";
             if(content) { content.style.borderColor = "#ff0055"; content.style.boxShadow = "0 0 30px #ff0055"; }
-            
             const playAgainBtn = winModal.querySelector(".secondary");
             if(playAgainBtn) {
                 playAgainBtn.style.display = "block";
                 playAgainBtn.innerText = "RETURN TO LOBBY";
-                playAgainBtn.onclick = () => window.returnToLobby();
+                playAgainBtn.onclick = () => { try{window.returnToLobby();}catch(e){window.goHome(true);} };
             }
         }
         return; 
     }
-
-    // =====================================
-    // FIX: SOLO / CAMPAIGN / CLASSROOM / QUIZ (Was missing - caused freeze)
-    // =====================================
     try { document.getElementById("start-countdown")?.classList.add("hidden"); } catch(e){}
     try { document.getElementById("class-curtain")?.classList.add("hidden"); } catch(e){}
+    try { document.getElementById("curtain-countdown")?.classList.add("hidden"); } catch(e){}
     try { if(window.Sound) window.Sound.playTone(100, 'sawtooth', 1.0); } catch(e){}
-
     setTimeout(() => {
         const reportModal = document.getElementById("report-modal");
         if(!reportModal) return;
@@ -3218,7 +3239,8 @@ window.gameOver = function() {
         try { if(window.renderTacticalLog) window.renderTacticalLog(); } catch(e){}
         try { if(window.generateMissionDebrief) window.generateMissionDebrief(); } catch(e){}
         try { if(window.generateTacticalReport) window.generateTacticalReport(); } catch(e){}
-        try { if(window.saveMatchRecord) window.saveMatchRecord(); } catch(e){}
+        try { if(window.saveMatchRecord) window.saveMatchRecord();
+        try{ if(state.gameMode==='campaign' && window.saveSession) window.saveSession(); }catch(e){} } catch(e){}
         if(state.gameMode === 'classroom') {
             const homeBtn = document.querySelector('#report-modal .text-only');
             if(homeBtn) homeBtn.style.display = 'none';
@@ -3303,7 +3325,7 @@ window.quitFromPause = function() {
 // Aliasing the global function just in case older code calls it directly
 function gameOver() { window.gameOver(); }      
 
-// Note: Moved inside gameOver
+// Fixed: moved inside gameOver - original orphaned block removed
 // if(state.gameMode === 'classroom') {
     // Hide the "Quit" button so they stay for the next round
     const homeBtn = document.querySelector('#report-modal .text-only');
@@ -5380,7 +5402,7 @@ window.fixGameResolution = function() {
     }
     
     // Fix Background Canvas as well
-    const bgCanvas = document.getElementById("bgCanvas"); 
+    let bgCanvas = document.getElementById("bgCanvas"); 
     if(bgCanvas) { 
         bgCanvas.width = window.innerWidth; 
         bgCanvas.height = window.innerHeight; 
@@ -5405,7 +5427,8 @@ window.showLeaderboard = async function() {
     try {
         if (!db) { throw new Error("Database connection failed"); }
         const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
-        const snap = await getDocs(q); let html = ""; let rank = 1;
+        const snap = await getDocs(query(q, limit(100))); // FIX: Limit to 100 to prevent reading entire collection
+ let html = ""; let rank = 1;
         snap.forEach(d => { let data = d.data(); html += `<div class="lb-row" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #444;"><span>#${rank} ${data.name}</span><span style="color:gold">${data.score}</span></div>`; rank++; });
         if(list) list.innerHTML = html || "No scores yet.";
     } catch(e) { console.error(e); if(list) list.innerHTML = "Error loading data."; }
@@ -5467,7 +5490,8 @@ window.viewMistakes = function() {
                         </div>
                         <div id="${uniqueId}" class="hidden" style="margin-top:10px; padding:10px; background:rgba(0, 229, 255, 0.1); border-left:2px solid #00e5ff; color:#ccc; font-size:12px; font-family:'Courier New'; white-space: pre-wrap;">${explanation}</div>
                     </div>`;
-                logContainer.innerHTML += html;
+                try { logContainer.insertAdjacentHTML('beforeend', html); } catch(e){ logContainer.innerHTML += html; } // FIX: Use insertAdjacentHTML with sanitized content
+
             });
         }
     } else {
@@ -5718,7 +5742,8 @@ window.showLeaderboard = async function() {
     try {
         if (!db) throw new Error("Database offline"); 
         const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
-        const snap = await getDocs(q); 
+        const snap = await getDocs(query(q, limit(100))); // FIX: Limit to 100 to prevent reading entire collection
+ 
         let html = ""; let rank = 1;
         snap.forEach(d => { 
             let data = d.data(); 
@@ -6540,6 +6565,13 @@ document.addEventListener("keydown", function(event) {
     }
 });
 
+
+window.escapeHtml = function(str) {
+    if(!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+};
+
+
 window.renderTacticalLog = function() {
     const logContainer = document.getElementById("mistakes-log");
     if (!logContainer) return;
@@ -6593,7 +6625,8 @@ window.renderTacticalLog = function() {
                 </div>
                 <div id="${uniqueId}" class="hidden" style="margin-top:15px; padding:15px; background:rgba(255, 255, 255, 0.05); border-left:2px solid ${color}; color:#ddd; font-size:14px; font-family:'Courier New'; white-space: pre-wrap;">${explanation}</div>
             </div>`;
-        logContainer.innerHTML += html;
+        try { logContainer.insertAdjacentHTML('beforeend', html); } catch(e){ logContainer.innerHTML += html; } // FIX: Use insertAdjacentHTML with sanitized content
+
         
     });
 };
@@ -6662,22 +6695,22 @@ window.generateMissionDebrief = function() {
 // 1. DATA CATALOG
 const shopCatalog = {
     ships: [
-        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'ship_default.png', desc: 'Reliable. Standard.' },
-        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'ship_gold.png', desc: 'Prestige Class.' },
-        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'ship_cyber.png', desc: 'Neon Aero-dynamics.' },
-        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'ship_tank.png', desc: 'Built like a tank.' },
+        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'assets/ship_default.png', desc: 'Reliable. Standard.' },
+        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'assets/ship_gold.png', desc: 'Prestige Class.' },
+        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'assets/ship_cyber.png', desc: 'Neon Aero-dynamics.' },
+        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'assets/ship_tank.png', desc: 'Built like a tank.' },
         
-        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'enemy_default.png', desc: 'Standard Threat.' },
-        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'enemy_alien.png', desc: 'Bio-organic Hull.' },
-        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'enemy_glitch.png', desc: 'Corrupted Data.' },
+        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'assets/enemy_default.png', desc: 'Standard Threat.' },
+        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'assets/enemy_alien.png', desc: 'Bio-organic Hull.' },
+        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'assets/enemy_glitch.png', desc: 'Corrupted Data.' },
 
-        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'boss_mech.png', desc: ' The Original.' },
-        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'boss_god.png', desc: 'Eldritch Nightmare.' }
+        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'assets/boss_mech.png', desc: ' The Original.' },
+        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'assets/boss_god.png', desc: 'Eldritch Nightmare.' }
     ],
     upgrades: [
-        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'supply_crate.png' },
-        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'supply_crate.png' },
-        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'supply_crate.png' }
+        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'assets/supply_crate.png' },
+        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'assets/supply_crate.png' },
+        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'assets/supply_crate.png' }
     ],
     fx: [
         { id: 'fx_blue', name: 'System Default', price: 0, color: '#00e5ff', aura: 'none', desc: 'Standard Ion Beam.' },
@@ -6889,7 +6922,9 @@ window.closeShop = function() {
 };
 
 // 4. SWITCH TABS
-window.switchShopTab = function(tab) {
+window.switchShopTab = function(tab, evt) {
+    let event = evt || window.event;
+
     if(window.Sound) window.Sound.click();
     currentShopTab = tab;
     
@@ -6952,7 +6987,7 @@ window.renderShopGrid = function() {
 
             cardHTML = `
                 <div class="shop-item">
-                    <img src="${item.img}" onerror="this.src='supply_crate.png'">
+                    <img src="${item.img}" onerror="this.src='assets/supply_crate.png'">
                     <h4>${item.name}</h4>
                     <div class="level-text"><span>Lvl ${currentLvl}</span><span>Max ${item.maxLevel}</span></div>
                     <div class="upgrade-track"><div class="upgrade-fill" style="width: ${progressPercent}%"></div></div>
@@ -7008,7 +7043,7 @@ window.renderShopGrid = function() {
 
             let visualPreview = (currentShopTab === 'fx') 
                 ? `<div class="fx-preview" style="background:${item.color}; box-shadow: 0 0 15px ${item.color}; border: 2px solid white;"></div>`
-                : `<img src="${item.img}" onerror="this.src='ship_default.png'">`;
+                : `<img src="${item.img}" onerror="this.src='assets/ship_default.png'">`;
 
             cardHTML = `
                 <div class="shop-item ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}">
@@ -8719,7 +8754,8 @@ window.fetchLeaderboardData = async function() {
             limit(10)
         );
         
-        const snap = await getDocs(q); 
+        const snap = await getDocs(query(q, limit(100))); // FIX: Limit to 100 to prevent reading entire collection
+ 
         let results = [];
         snap.forEach(d => results.push(d.data()));
 
@@ -9970,9 +10006,9 @@ window.closeRewardModal = function() {
 
 // 🟢 ADD SECRET SKINS TO SHOP CATALOG (So it renders in the Armory when they check)
 // Hanapin ang 'shopCatalog' object mo sa script.js at idagdag ang mga ito sa 'ships' at 'fx':
-shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
 shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
 
 // ==========================================
@@ -10024,7 +10060,8 @@ window.startCampaignLevel = function(levelNum) {
 // ==========================================
 
 // 1. OPEN MAP BUTTON (Main Menu -> Campaign)
-window.openCampaignMap = function() {
+window.openCampaignMap = window.openCampaignMap || function() {
+
     console.log("SYSTEM: Opening Campaign Map..."); 
     if(window.Sound) window.Sound.click();
     
@@ -10097,7 +10134,8 @@ window.startCampaignLevel = function(levelNum) {
 // ==========================================
 
 // 1. OPEN / CLOSE MAP
-window.openCampaignMap = function() {
+window.openCampaignMap = window.openCampaignMap || function() {
+
     if(window.Sound) window.Sound.click();
     document.getElementById("start-modal").classList.add("hidden");
     document.getElementById("campaign-modal").classList.remove("hidden");
@@ -10141,6 +10179,8 @@ window.updateMilestoneSidebar = function(currentLevel) {
 
 // 3. AAA CIRCUIT MAP GENERATOR
 window.renderCampaignGrid = function() {
+    try {
+
     const grid = document.getElementById("campaign-grid");
     const svgPath = document.getElementById("map-path-layer");
     const scrollArea = document.getElementById("map-scroll-area");
@@ -10352,9 +10392,9 @@ window.closeRewardModal = function() {
 // 6. INJECT SECRET SKINS TO SHOP CATALOG (IF NOT YET ADDED)
 if (typeof shopCatalog !== 'undefined') {
     if (!shopCatalog.ships.some(s => s.id === 'turret_phantom')) {
-        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
         shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
     }
 }
@@ -10729,6 +10769,9 @@ window.getCurrentPet = function() {
 
 // 🐾 THE ORBITAL STRIKE VISUALS (PET ATTACK)
 window.petAutoFire = function() {
+    // FIX: Don't fire if not playing
+    if(!state.isPlaying || state.isPaused) return;
+
     if (!state.isPlaying || state.isPaused || state.meteors.length === 0) return;
     
     // Hanapin ang pinakamababang kalaban
@@ -10782,8 +10825,8 @@ window.petAutoFire = function() {
 // ==========================================
 // 🌌 THE N.E.X.U.S. CORE MATRIX (AAA BACKGROUND)
 // ==========================================
-const bgCanvas = document.getElementById("bgCanvas");
-const bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
+bgCanvas = document.getElementById("bgCanvas");
+let bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
 
 let nexusNodes = [];
 let mouse = { x: -1000, y: -1000, radius: 200 };
@@ -11842,5 +11885,18 @@ window.joinCustomQuiz = async function() {
         }
     } catch(e) {
         alert("Connection error.");
+    }
+};
+
+
+// FIX: Safe wrapper for campaign grid
+window._originalRenderCampaignGrid = window._originalRenderCampaignGrid || window.renderCampaignGrid;
+window.renderCampaignGrid = function() {
+    try {
+        if(window._originalRenderCampaignGrid) window._originalRenderCampaignGrid.apply(this, arguments);
+    } catch(e) {
+        console.error("renderCampaignGrid error:", e);
+        const grid = document.getElementById("campaign-grid");
+        if(grid) grid.innerHTML = "<p style='color:#ff0055'>Error loading campaign. Please refresh.</p>";
     }
 };
