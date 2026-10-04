@@ -4,8 +4,8 @@ import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, 
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
 // Modular Injections
-// audio.js classic
-// tactical-solver classic
+// audio classic
+// tactical classic
 
 const firebaseConfig = {
   apiKey: "AIzaSyBT8uh1vno4uoK_F77zMS7K8x223ioH-wk",
@@ -158,12 +158,11 @@ let intermissionSeconds = 10;
 // ✅ NEW: Variable to store the saved session without acting on it yet
 let pendingSessionData = null;
 
-// Early fallback to prevent crash
+// EARLY GUARDS FOR GITHUB PAGES - prevents crash
+window.bgCanvas = window.bgCanvas || document.getElementById("bgCanvas");
+window.bgCtx = window.bgCtx || (window.bgCanvas ? window.bgCanvas.getContext("2d") : null);
 if (typeof window.getCurrentPet !== 'function') {
     window.getCurrentPet = function() { return null; };
-}
-if (typeof window.petCatalog === 'undefined') {
-    window.petCatalog = { common:[], rare:[], epic:[], legendary:[], mythic:[] };
 }
  
 
@@ -3855,7 +3854,7 @@ window.handleCombo = function(isHit, x, y) {
 
 
 let rainDrops = [];
-window.initRain = function() { if(!bgCanvas) bgCanvas = document.getElementById("bgCanvas"); if(!bgCanvas) return; if(!bgCtx) bgCtx = bgCanvas.getContext("2d"); if(!bgCtx) return; bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; const columns = bgCanvas.width / 20; for(let i=0; i<columns; i++) rainDrops[i] = 1; };
+window.initRain = function() { if(!bgCanvas) bgCanvas = document.getElementById("bgCanvas"); if(!bgCanvas) return; if(!bgCtx) bgCtx = bgCanvas.getContext("2d"); bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; const columns = bgCanvas.width / 20; for(let i=0; i<columns; i++) rainDrops[i] = 1; };
 window.drawRain = function() { if(!bgCtx) return; bgCtx.fillStyle = "rgba(2, 2, 5, 0.1)"; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.fillStyle = "#00f3ff"; bgCtx.font = "15px 'Orbitron'"; for(let i=0; i<rainDrops.length; i++) { const text = String.fromCharCode(0x30A0 + Math.random() * 96); bgCtx.fillText(text, i*20, rainDrops[i]*20); if(rainDrops[i]*20 > bgCanvas.height && Math.random() > 0.975) rainDrops[i] = 0; rainDrops[i]++; } };
 window.triggerGlitch = function(duration = 200) { const overlay = document.getElementById("glitch-overlay"); if(overlay) { overlay.classList.remove("hidden"); if(window.Sound) window.Sound.playTone(Math.random()*500+100, 'sawtooth', 0.1); setTimeout(() => { overlay.classList.add("hidden"); }, duration); } };
 window.addEventListener('resize', () => { if(bgCanvas) { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; } });
@@ -5362,10 +5361,10 @@ window.fixGameResolution = function() {
     }
     
     // Fix Background Canvas as well
-    var bgCanvas = document.getElementById("bgCanvas"); 
-    if(bgCanvas) { 
-        bgCanvas.width = window.innerWidth; 
-        bgCanvas.height = window.innerHeight; 
+    let _bgCanvas = document.getElementById("bgCanvas"); 
+    if(_bgCanvas) { 
+        _bgCanvas.width = window.innerWidth; 
+        _bgCanvas.height = window.innerHeight; 
     }
 };
 

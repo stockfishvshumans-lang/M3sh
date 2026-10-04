@@ -8,7 +8,7 @@
 
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-        <title>M3sh</title>
+        <title>JESSMATH: ELITE DEFENSE</title>
 
         
 
@@ -17,13 +17,10 @@
         
 
         <script>
-        // GitHub Pages fallback - socket.io disabled
-        window._socketFake = {
-            on: () => {}, off: () => {}, emit: () => {}, connected: false, _fake: true
-        };
-        window.io = window.io || function() { return window._socketFake; };
+    window._fakeSocket = { on:()=>{}, off:()=>{}, emit:()=>{}, connected:false, _fake:true };
+    window.io = window.io || function(){ return window._fakeSocket; };
     </script>
-    <script src="/socket.io/socket.io.js" onerror="console.warn('⚠️ socket.io 404 - solo mode active'); window.io = function(){ return {on:()=>{}, off:()=>{}, emit:()=>{}, connected:false, _fake:true}; };"></script>
+    <script src="/socket.io/socket.io.js" onerror="console.warn('socket.io 404 - solo mode')"></script>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -2979,8 +2976,8 @@
 
         <div class="scanline-overlay"></div>
 
-        <script src="./audio.js" onerror="console.warn('audio.js missing')"></script>
-    <script src="./tactical-solver.js" onerror="console.warn('tactical missing')"></script>
+        <script src="./audio.js"></script>
+    <script src="./tactical-solver.js"></script>
     <script type="module" src="./script.js"></script>
 
 
