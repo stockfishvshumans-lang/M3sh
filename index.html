@@ -23,7 +23,7 @@
         };
         window.io = window.io || function() { return window._socketFake; };
     </script>
-    <script src="/socket.io/socket.io.js" onerror="console.warn('⚠️ socket.io not found - solo mode');"></script>
+    <script src="/socket.io/socket.io.js" onerror="console.warn('⚠️ socket.io 404 - solo mode active'); window.io = function(){ return {on:()=>{}, off:()=>{}, emit:()=>{}, connected:false, _fake:true}; };"></script>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 

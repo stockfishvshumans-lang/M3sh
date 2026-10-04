@@ -269,8 +269,9 @@ document.addEventListener('click', () => {
 // 2. INTRO MUSIC
 const originalIntroLoad = window.onload;
 window.addEventListener('load', () => {
-    setTimeout(() => { 
-        if(window.Sound) {
-            window.Sound.playBGM('intro');
-        }
-    }, 1000);
+    setTimeout(() => { 
+        if(window.Sound) {
+            window.Sound.playBGM('intro');
+        }
+    }, 1000);
+});
