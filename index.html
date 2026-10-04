@@ -16,18 +16,14 @@
 
         
 
-        <!-- SOCKET.IO - OPTIONAL: Only loads if server supports it, won't crash if 404 -->
         <script>
-            // Pre-define io fallback so script.js doesn't crash
-            window.io = window.io || function() { 
-                console.warn("Socket.io not available - multiplayer disabled");
-                return { 
-                    on: () => {}, emit: () => {}, connected: false,
-                    _fake: true 
-                }; 
-            };
-        </script>
-        <script src="/socket.io/socket.io.js" onerror="console.warn('⚠️ socket.io.js not found (HTML returned) - running in solo mode'); window.io = window.io || function(){ return { on:()=>{}, emit:()=>{}, connected:false, _fake:true }; }"></script>
+        // GitHub Pages fallback - socket.io disabled
+        window._socketFake = {
+            on: () => {}, off: () => {}, emit: () => {}, connected: false, _fake: true
+        };
+        window.io = window.io || function() { return window._socketFake; };
+    </script>
+    <script src="/socket.io/socket.io.js" onerror="console.warn('⚠️ socket.io not found - solo mode');"></script>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -2983,39 +2979,9 @@
 
         <div class="scanline-overlay"></div>
 
-        <!-- FIX: Load audio & tactical as classic scripts first (avoids MIME module strict check) -->
-        <script src="./audio.js" onerror="console.warn('audio.js not found')"></script>
-        <script src="./tactical-solver.js" onerror="console.warn('tactical-solver.js not found')"></script>
-
-        <!-- FIX: Emergency fallback for boot button if module fails to load -->
-        <script>
-            window._bootFallback = setTimeout(() => {
-                if (typeof window.startSystem !== 'function') {
-                    console.error("Module failed to load - activating emergency boot");
-                    window.startSystem = function() {
-                        const boot = document.getElementById('boot-overlay');
-                        const cinematic = document.getElementById('cinematic-intro');
-                        if (boot) boot.style.display = 'none';
-                        if (cinematic) cinematic.style.display = 'none';
-                        document.getElementById('start-modal')?.classList.remove('hidden');
-                        alert("EMERGENCY MODE: Main module failed to load (check console).\n\nCommon fixes:\n1. Run via HTTP server (not file://)\n2. Ensure script.js, audio.js, tactical-solver.js are in same folder\n3. Check browser console for 404s");
-                    };
-                    const btn = document.getElementById('btn-master-start');
-                    if (btn) btn.innerHTML = '<span class="btn-text">EMERGENCY BOOT (Module Error)</span><div class="btn-scanner"></div>';
-                }
-            }, 3000);
-            
-            // If module loads, cancel fallback
-            window.addEventListener('load', () => {
-                setTimeout(() => {
-                    if (typeof window.startSystem === 'function' && window.startSystem.toString().includes('EMERGENCY') === false) {
-                        clearTimeout(window._bootFallback);
-                    }
-                }, 100);
-            });
-        </script>
-
-        <script type="module" src="./script.js"></script>
+        <script src="./audio.js" onerror="console.warn('audio.js missing')"></script>
+    <script src="./tactical-solver.js" onerror="console.warn('tactical missing')"></script>
+    <script type="module" src="./script.js"></script>
 
 
 

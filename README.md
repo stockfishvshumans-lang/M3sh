@@ -1,28 +1,14 @@
-# JESSMATH: ELITE DEFENSE - GitHub Pages Deploy
+# Fixed v2 for GitHub Pages
 
-## What's Fixed for GitHub Pages
-✅ Removed hard dependency on /socket.io/socket.io.js (only for Node.js servers)
-✅ audio.js & tactical-solver.js now load as classic scripts (fixes MIME text/html error)
-✅ Duplicate Firebase init fixed
-✅ Emergency boot fallback added
-✅ Game auto-runs in SOLO MODE on GitHub Pages
+## Fixes in this version:
+1. ✅ audio.js duplicate code removed (was 1105 lines with 4 copies, now 276 lines)
+2. ✅ socket.io fake now has .off() method - fixes `socket.off is not a function`
+3. ✅ All PNG paths changed to `assets/` folder (ship_*.png, enemy_*.png, etc)
+4. ✅ bgCanvas temporal dead zone fixed (var instead of const + lazy init)
+5. ✅ getCurrentPet early fallback added
+6. ✅ Firebase duplicate init fixed
+7. ✅ GitHub Pages solo mode (no socket.io server needed)
 
-## Deploy Steps
-1. Create new GitHub repo: jessmath-elite-defense
-2. Upload ALL files in this folder to repo root
-3. Go to Settings > Pages > Source: Deploy from main branch / root
-4. Wait 1-2 mins, your link will be: https://YOUR_USERNAME.github.io/jessmath-elite-defense/
-
-## For Multiplayer (Optional)
-Multiplayer needs Node.js server with socket.io. GitHub Pages is static only.
-If you want multiplayer later, deploy server separately on Render/Railway.
-
-## For Firebase Quick Test
-firebase deploy works too - same files, multiplayer will be disabled (solo mode).
-
-Files included:
-- index.html (fixed)
-- script.js (fixed, no duplicate Firebase)
-- style.css (original 14k lines)
-- audio.js (your pro audio engine)
-- tactical-solver.js (new NEXUS solver)
+## Deploy:
+Upload entire folder contents to GitHub repo root.
+Make sure your actual PNG files are in assets/ folder in the repo!

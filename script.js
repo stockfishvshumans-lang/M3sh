@@ -3,41 +3,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, setDoc, getDoc, onSnapshot, updateDoc, where, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
-// Modular Injections - FIXED
-// audio.js now loaded as classic script in index.html - no import needed
-// import './audio.js'; // REMOVED to fix MIME error
-
-// tactical-solver.js is OPTIONAL - load dynamically without crashing if missing
-(async () => {
-    try {
-        if (typeof window.solveTacticalEquation === 'undefined') { await import('./tactical-solver.js'); } else { console.log('✅ tactical-solver.js already loaded as classic'); }
-        console.log("✅ tactical-solver.js loaded");
-    } catch(e) {
-        console.warn("⚠️ tactical-solver.js not found - using built-in fallback", e.message);
-        // Fallback implementations for anything tactical-solver might have provided
-        if (typeof window.solveTacticalEquation !== 'function') {
-            window.solveTacticalEquation = function(eq) {
-                try { 
-                    // Basic algebra solver fallback: handles 'x' equations
-                    if (eq.includes('x')) {
-                        // Extract: e.g. 3x + 5 = 20 -> solve
-                        const parts = eq.split('=');
-                        if (parts.length === 2) {
-                            const right = parseFloat(parts[1].trim());
-                            const left = parts[0];
-                            // Very simple parser - for full solver, tactical-solver.js should override
-                            return right; // fallback
-                        }
-                    }
-                    return eval(eq.replace(/x/g,'*'));
-                } catch(e) { return null; }
-            };
-        }
-        if (typeof window.nexusAutoCorrect !== 'function') {
-            window.nexusAutoCorrect = function(input) { return input; }
-        }
-    }
-})();
+// Modular Injections
+// audio.js loaded as classic script - removed import
+// tactical-solver.js loaded as classic script - removed import
 
 const firebaseConfig = {
   apiKey: "AIzaSyBT8uh1vno4uoK_F77zMS7K8x223ioH-wk",
@@ -51,18 +19,6 @@ const firebaseConfig = {
 
 
 const app = initializeApp(firebaseConfig);
-
-// FIX: Auto-correct duplicate game-wrapper IDs in DOM if present
-window.addEventListener('DOMContentLoaded', () => {
-    const wrappers = document.querySelectorAll('#game-wrapper');
-    if (wrappers.length > 1) {
-        console.warn(`Found ${wrappers.length} #game-wrapper elements - fixing`);
-        for (let i = 1; i < wrappers.length; i++) {
-            wrappers[i].id = `game-wrapper-inner-${i}`;
-        }
-    }
-});
-
 
 
 // 1. INITIATE CALL (WITH BROWSER SECURITY CHECK & TIMEOUT)
@@ -175,18 +131,10 @@ window.toggleFullScreen = function() {
 
 let db, auth;
 try {
-    // FIX: Reuse existing app from line 21, don't re-initialize
-    db = getFirestore(app);
-    auth = getAuth(app);
-} catch(e) { 
-    console.error("Firebase Error:", e); 
-    // Fallback: if app not initialized for some reason
-    try {
-        const fallbackApp = initializeApp(firebaseConfig);
-        db = getFirestore(fallbackApp);
-        auth = getAuth(fallbackApp);
-    } catch(e2) { console.error("Firebase fallback failed:", e2); }
-}
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+} catch(e) { console.error("Firebase Error:", e); }
 
 let socket;
 try {
@@ -208,7 +156,15 @@ let autoStartTimer = null; 
 let isAutoStarting = false;
 let intermissionSeconds = 10;
 // ✅ NEW: Variable to store the saved session without acting on it yet
-let pendingSessionData = null; 
+let pendingSessionData = null;
+
+// FIX: Early fallback for getCurrentPet to prevent crash before full definition loads
+if (typeof window.getCurrentPet !== 'function') {
+    window.getCurrentPet = function() { 
+        return { id: 'default', name: 'Default', bonus: 0, element: 'none' }; 
+    };
+}
+ 
 
 // --- 💾 SESSION & HEARTBEAT MANAGERS ---
 function saveSession(role, room, name, docId) {
@@ -471,23 +427,23 @@ window.resumeClassSession = function() {
 // --- 3. ASSET MANAGER (Visuals) ---
 const assets = {
     ships: {
-        'turret_def': { src: 'ship_default.png', img: new Image() },
-        'turret_gold': { src: 'ship_gold.png', img: new Image() },
-        'turret_cyber': { src: 'ship_cyber.png', img: new Image() },
-        'turret_tank': { src: 'ship_tank.png', img: new Image() }
+        'turret_def': { src: 'assets/ship_default.png', img: new Image() },
+        'turret_gold': { src: 'assets/ship_gold.png', img: new Image() },
+        'turret_cyber': { src: 'assets/ship_cyber.png', img: new Image() },
+        'turret_tank': { src: 'assets/ship_tank.png', img: new Image() }
     },
     enemies: {
-        'enemy_def': { src: 'enemy_default.png', img: new Image() },
-        'enemy_alien': { src: 'enemy_alien.png', img: new Image() },
-        'enemy_glitch': { src: 'enemy_glitch.png', img: new Image() }
+        'enemy_def': { src: 'assets/enemy_default.png', img: new Image() },
+        'enemy_alien': { src: 'assets/enemy_alien.png', img: new Image() },
+        'enemy_glitch': { src: 'assets/enemy_glitch.png', img: new Image() }
     },
     boss: {
-        'boss_def': { src: 'boss_mech.png', img: new Image() },
-        'boss_god': { src: 'boss_god.png', img: new Image() }
+        'boss_def': { src: 'assets/boss_mech.png', img: new Image() },
+        'boss_god': { src: 'assets/boss_god.png', img: new Image() }
     },
     misc: {
         'city': { src: '', img: new Image() },
-        'supply': { src: 'supply_crate.png', img: new Image() }
+        'supply': { src: 'assets/supply_crate.png', img: new Image() }
     }
 };
 
@@ -3898,7 +3854,15 @@ window.handleCombo = function(isHit, x, y) {
 
 
 let rainDrops = [];
-window.initRain = function() { if(!bgCanvas) return; bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; const columns = bgCanvas.width / 20; for(let i=0; i<columns; i++) rainDrops[i] = 1; };
+window.initRain = function() { 
+    if(!bgCanvas) bgCanvas = document.getElementById("bgCanvas");
+    if(!bgCanvas) return; 
+    if(!bgCtx) bgCtx = bgCanvas.getContext("2d");
+    bgCanvas.width = window.innerWidth; 
+    bgCanvas.height = window.innerHeight; 
+    const columns = bgCanvas.width / 20; 
+    for(let i=0; i<columns; i++) rainDrops[i] = 1; 
+};
 window.drawRain = function() { if(!bgCtx) return; bgCtx.fillStyle = "rgba(2, 2, 5, 0.1)"; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.fillStyle = "#00f3ff"; bgCtx.font = "15px 'Orbitron'"; for(let i=0; i<rainDrops.length; i++) { const text = String.fromCharCode(0x30A0 + Math.random() * 96); bgCtx.fillText(text, i*20, rainDrops[i]*20); if(rainDrops[i]*20 > bgCanvas.height && Math.random() > 0.975) rainDrops[i] = 0; rainDrops[i]++; } };
 window.triggerGlitch = function(duration = 200) { const overlay = document.getElementById("glitch-overlay"); if(overlay) { overlay.classList.remove("hidden"); if(window.Sound) window.Sound.playTone(Math.random()*500+100, 'sawtooth', 0.1); setTimeout(() => { overlay.classList.add("hidden"); }, duration); } };
 window.addEventListener('resize', () => { if(bgCanvas) { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; } });
@@ -5405,7 +5369,8 @@ window.fixGameResolution = function() {
     }
     
     // Fix Background Canvas as well
-    const bgCanvas = document.getElementById("bgCanvas"); 
+    var bgCanvas = document.getElementById("bgCanvas");
+var bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null; 
     if(bgCanvas) { 
         bgCanvas.width = window.innerWidth; 
         bgCanvas.height = window.innerHeight; 
@@ -6687,22 +6652,22 @@ window.generateMissionDebrief = function() {
 // 1. DATA CATALOG
 const shopCatalog = {
     ships: [
-        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'ship_default.png', desc: 'Reliable. Standard.' },
-        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'ship_gold.png', desc: 'Prestige Class.' },
-        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'ship_cyber.png', desc: 'Neon Aero-dynamics.' },
-        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'ship_tank.png', desc: 'Built like a tank.' },
+        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'assets/ship_default.png', desc: 'Reliable. Standard.' },
+        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'assets/ship_gold.png', desc: 'Prestige Class.' },
+        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'assets/ship_cyber.png', desc: 'Neon Aero-dynamics.' },
+        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'assets/ship_tank.png', desc: 'Built like a tank.' },
         
-        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'enemy_default.png', desc: 'Standard Threat.' },
-        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'enemy_alien.png', desc: 'Bio-organic Hull.' },
-        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'enemy_glitch.png', desc: 'Corrupted Data.' },
+        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'assets/enemy_default.png', desc: 'Standard Threat.' },
+        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'assets/enemy_alien.png', desc: 'Bio-organic Hull.' },
+        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'assets/enemy_glitch.png', desc: 'Corrupted Data.' },
 
-        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'boss_mech.png', desc: ' The Original.' },
-        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'boss_god.png', desc: 'Eldritch Nightmare.' }
+        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'assets/boss_mech.png', desc: ' The Original.' },
+        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'assets/boss_god.png', desc: 'Eldritch Nightmare.' }
     ],
     upgrades: [
-        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'supply_crate.png' },
-        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'supply_crate.png' },
-        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'supply_crate.png' }
+        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'assets/supply_crate.png' },
+        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'assets/supply_crate.png' },
+        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'assets/supply_crate.png' }
     ],
     fx: [
         { id: 'fx_blue', name: 'System Default', price: 0, color: '#00e5ff', aura: 'none', desc: 'Standard Ion Beam.' },
@@ -6977,7 +6942,7 @@ window.renderShopGrid = function() {
 
             cardHTML = `
                 <div class="shop-item">
-                    <img src="${item.img}" onerror="this.src='supply_crate.png'">
+                    <img src="${item.img}" onerror="this.src='assets/supply_crate.png'">
                     <h4>${item.name}</h4>
                     <div class="level-text"><span>Lvl ${currentLvl}</span><span>Max ${item.maxLevel}</span></div>
                     <div class="upgrade-track"><div class="upgrade-fill" style="width: ${progressPercent}%"></div></div>
@@ -7033,7 +6998,7 @@ window.renderShopGrid = function() {
 
             let visualPreview = (currentShopTab === 'fx') 
                 ? `<div class="fx-preview" style="background:${item.color}; box-shadow: 0 0 15px ${item.color}; border: 2px solid white;"></div>`
-                : `<img src="${item.img}" onerror="this.src='ship_default.png'">`;
+                : `<img src="${item.img}" onerror="this.src='assets/ship_default.png'">`;
 
             cardHTML = `
                 <div class="shop-item ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}">
@@ -9761,7 +9726,7 @@ const rtcConfig = {
 
 
 // 2. SOCKET LISTENERS FOR VOICE CALL (Prevent Duplicate Listeners)
-if (socket) {
+if (socket && typeof socket.off === 'function') {
     socket.off('incoming_voice_call');
     socket.off('call_accepted');
     socket.off('call_rejected');
@@ -9995,9 +9960,9 @@ window.closeRewardModal = function() {
 
 // 🟢 ADD SECRET SKINS TO SHOP CATALOG (So it renders in the Armory when they check)
 // Hanapin ang 'shopCatalog' object mo sa script.js at idagdag ang mga ito sa 'ships' at 'fx':
-shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
 shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
 
 // ==========================================
@@ -10377,9 +10342,9 @@ window.closeRewardModal = function() {
 // 6. INJECT SECRET SKINS TO SHOP CATALOG (IF NOT YET ADDED)
 if (typeof shopCatalog !== 'undefined') {
     if (!shopCatalog.ships.some(s => s.id === 'turret_phantom')) {
-        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
         shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
     }
 }
@@ -10807,7 +10772,8 @@ window.petAutoFire = function() {
 // ==========================================
 // 🌌 THE N.E.X.U.S. CORE MATRIX (AAA BACKGROUND)
 // ==========================================
-const bgCanvas = document.getElementById("bgCanvas");
+var bgCanvas = document.getElementById("bgCanvas");
+var bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
 const bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
 
 let nexusNodes = [];
