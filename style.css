@@ -15017,3 +15017,11 @@ body.dashboard-active #teacher-dashboard:not(.hidden) {
     pointer-events: auto !important;
     z-index: 260 !important;
 }
+
+/* ULTIMATE HOLOGRAM FIX v2 */
+#ui-layer { pointer-events: none !important; }
+#hud-bottom, .command-console, .console-wing { pointer-events: auto !important; z-index: 999 !important; }
+.tactical-btn, .trigger-btn { pointer-events: auto !important; cursor: pointer !important; z-index: 1000 !important; position: relative !important; }
+.tactical-btn:hover, .trigger-btn:hover { transform: scale(1.1) !important; }
+#game-wrapper { perspective: none !important; transform-style: flat !important; }
+#start-countdown.hidden, #curtain-countdown.hidden { display: none !important; opacity: 0 !important; pointer-events: none !important; }

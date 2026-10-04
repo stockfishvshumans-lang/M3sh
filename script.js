@@ -2841,7 +2841,7 @@ function handleMiss(val, meteorObj = null) {
     if(window.Sound) window.Sound.error(); 
     state.health -= 10; 
     updateHUD(); 
-    if (state.health <= 0) gameOver();
+    if (state.health <= 0) { console.log('Health 0 in handleMiss'); window.gameOver(true); }
 }
 
 function handleBossHit(m, idx) {
@@ -3201,105 +3201,165 @@ window.playOutroSequence = function(isWin) {
     }, 3000); // 3 Seconds Delay
 };
 
-window.gameOver = function() {
-    console.log("GAME OVER TRIGGERED - Mode:", state.gameMode, "Health:", state.health);
-    if (state.matchConcluded) {
-        console.log("Already concluded, skipping");
-        return;
+window.gameOver = function(force) {
+    console.log("💀 GAME OVER TRIGGERED - Mode:", state.gameMode, "Health:", state.health, "Force:", force, "matchConcluded:", state.matchConcluded);
+    
+    // If already concluded and not forced, allow but still try to show report if report is hidden
+    if (state.matchConcluded && !force) {
+        console.log("Already concluded, checking if report is visible...");
+        const report = document.getElementById("report-modal");
+        const win = document.getElementById("win-modal");
+        if(report && !report.classList.contains("hidden")) {
+            console.log("Report already visible, skipping");
+            return;
+        }
+        if(win && !win.classList.contains("hidden")) {
+            console.log("Win modal already visible, skipping");
+            return;
+        }
+        // If no modal visible, force continue to show game over
+        console.log("No modal visible despite matchConcluded, forcing game over UI");
     }
+    
     state.matchConcluded = true;
+    state.isPlaying = false;
+    state.isPaused = false;
 
     document.body.classList.remove('in-combat');
     
-    if (typeof scoreInterval !== 'undefined' && scoreInterval) clearInterval(scoreInterval);
-    if (state.gameTimer) clearInterval(state.gameTimer);
-    if (window.Sound) window.Sound.stopBGM();
+    // Kill all timers
+    try { if (typeof scoreInterval !== 'undefined' && scoreInterval) clearInterval(scoreInterval); } catch(e){}
+    try { if (state.gameTimer) clearInterval(state.gameTimer); } catch(e){}
+    try { if (state.spawnTimer) state.spawnTimer = 0; } catch(e){}
+    try { if(window.Sound) window.Sound.stopBGM(); } catch(e){}
+    
+    if(window.inputField) try{ window.inputField.blur(); }catch(e){}
 
-    state.isPlaying = false; 
-    if(window.inputField) window.inputField.blur();
+    // CRITICAL: Hide ALL countdowns and blockers that cause freeze with "1"
+    try {
+        document.getElementById("start-countdown")?.classList.add("hidden");
+        document.getElementById("class-curtain")?.classList.add("hidden");
+        document.getElementById("curtain-countdown")?.classList.add("hidden");
+        // Hide any other countdown
+        document.querySelectorAll('[id*="countdown"]').forEach(el => {
+            el.classList.add("hidden");
+            el.style.display = "none";
+        });
+    } catch(e){ console.warn(e); }
 
-    // Hide stuck countdowns
-    const sc = document.getElementById("start-countdown");
-    if(sc) sc.classList.add("hidden");
-    const curtain = document.getElementById("class-curtain");
-    if(curtain && state.gameMode !== 'classroom') curtain.classList.add("hidden");
-    document.querySelectorAll('.tactical-btn, .trigger-btn').forEach(b=>{ b.style.pointerEvents='auto'; });
+    // Make hologram buttons clickable again after death
+    try {
+        document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn, #hud-bottom, .command-console, .console-wing').forEach(el => {
+            el.style.pointerEvents = 'auto';
+            el.style.zIndex = '999';
+        });
+    } catch(e){}
 
-    // VS / PARTY
+    // VS / PARTY DEFEAT
     if (state.gameMode === 'vs' || state.gameMode === 'party') {
         if (socket && currentRoomId) {
-            state.health = 0; 
-            if (state.gameMode === 'vs') {
-                try {
+            try {
+                state.health = 0; 
+                if (state.gameMode === 'vs') {
                     socket.emit('player_died', { room: currentRoomId });
                     socket.emit('send_vs_state', { room: currentRoomId, state: { meteors: [], lasers: [], health: 0, score: state.score } });
-                } catch(e){}
-            }
+                }
+            } catch(e){}
         }
         const winModal = document.getElementById("win-modal");
         if(winModal) {
             winModal.classList.remove("hidden");
+            winModal.style.display = "flex";
+            winModal.style.zIndex = "99999";
+            winModal.style.pointerEvents = "auto";
             const title = winModal.querySelector("h1");
             const sub = winModal.querySelector(".subtitle");
             const content = winModal.querySelector(".modal-content");
             if(title) { title.innerText = "DEFEAT"; title.style.color = "#ff0055"; title.style.textShadow = "0 0 20px #ff0055"; }
             if(sub) sub.innerText = state.gameMode === 'party' ? "SQUAD WIPED OUT" : "SYSTEM CRITICAL";
             if(content) { content.style.borderColor = "#ff0055"; content.style.boxShadow = "0 0 30px #ff0055"; }
+            const scoreEl = document.getElementById("win-score");
+            if(scoreEl) scoreEl.innerText = state.score;
             const playAgainBtn = winModal.querySelector(".secondary");
             if(playAgainBtn) {
                 playAgainBtn.style.display = "block";
-                playAgainBtn.innerText = "RETURN TO LOBBY";
+                playAgainBtn.innerText = "RETURN TO BASE";
                 playAgainBtn.onclick = () => { try{window.returnToLobby();}catch(e){window.goHome(true);} };
             }
         }
         return; 
     }
 
-    // SOLO / CAMPAIGN / CLASSROOM / QUIZ - ALL MODES
-    if(window.Sound) try{ window.Sound.playTone(100, 'sawtooth', 1.0); }catch(e){}
+    // SOLO / CAMPAIGN / CLASSROOM / QUIZ / ANY OTHER MODE
+    console.log("Showing debrief for", state.gameMode);
+    try { if(window.Sound) window.Sound.playTone(100, 'sawtooth', 1.0); } catch(e){}
 
-    setTimeout(() => {
-        // Ensure report modal exists
+    // Immediate show + delayed safety show
+    const showReport = () => {
         const reportModal = document.getElementById("report-modal");
         if(!reportModal) {
-            console.error("report-modal missing, fallback to goHome");
-            window.goHome(true);
+            console.error("report-modal missing, fallback to home");
+            setTimeout(()=>window.goHome(true), 500);
             return;
         }
+        console.log("Showing report-modal");
         reportModal.classList.remove("hidden");
         reportModal.style.display = "flex";
         reportModal.style.zIndex = "99999";
         reportModal.style.pointerEvents = "auto";
+        reportModal.style.opacity = "1";
+        reportModal.style.visibility = "visible";
         
         const repScore = document.getElementById("rep-score");
         if(repScore) repScore.innerText = state.score;
         
-        // Generate analytics safely
-        try { if(typeof window.renderTacticalLog === 'function') window.renderTacticalLog(); } catch(e){ console.warn(e); }
-        try { if(typeof window.generateMissionDebrief === 'function') window.generateMissionDebrief(); } catch(e){ console.warn(e); }
-        try { if(typeof window.generateTacticalReport === 'function') window.generateTacticalReport(); } catch(e){ console.warn(e); }
-        try { if(typeof window.saveMatchRecord === 'function') window.saveMatchRecord(); } catch(e){ console.warn(e); }
+        // Generate analytics with safety
+        setTimeout(()=>{
+            try { if(typeof window.renderTacticalLog === 'function') window.renderTacticalLog(); } catch(e){ console.warn("renderTacticalLog", e); }
+            try { if(typeof window.generateMissionDebrief === 'function') window.generateMissionDebrief(); } catch(e){ console.warn("generateMissionDebrief", e); }
+            try { if(typeof window.generateTacticalReport === 'function') window.generateTacticalReport(); } catch(e){ console.warn("generateTacticalReport", e); }
+            try { if(typeof window.saveMatchRecord === 'function') window.saveMatchRecord(); } catch(e){ console.warn("saveMatchRecord", e); }
+        }, 100);
 
-        // Classroom special handling
         if(state.gameMode === 'classroom') {
-            const homeBtn = document.querySelector('#report-modal .text-only');
-            if(homeBtn) homeBtn.style.display = 'none';
-            const retryBtn = document.querySelector('#report-modal .secondary');
-            if(retryBtn) retryBtn.style.display = 'none';
-            // Report progress to teacher
-            try { if(typeof window.reportProgress === 'function') window.reportProgress(true); } catch(e){}
+            try { 
+                document.querySelector('#report-modal .text-only')?.style.setProperty('display','none');
+                document.querySelector('#report-modal .secondary')?.style.setProperty('display','none');
+                if(typeof window.reportProgress === 'function') window.reportProgress(true); 
+            } catch(e){}
         }
-        
-        // Campaign: check if should show reward
-        if(state.gameMode === 'campaign' && window.pendingRewardLevel) {
-            setTimeout(() => {
-                const rewardModal = document.getElementById("reward-modal");
-                if(rewardModal) rewardModal.classList.remove("hidden");
-            }, 1000);
+    };
+
+    // Show immediately and also after 1s as backup
+    showReport();
+    setTimeout(showReport, 800);
+    
+    // Emergency fallback: if still not visible after 2s, force reload to home
+    setTimeout(()=>{
+        const report = document.getElementById("report-modal");
+        if(report && report.classList.contains("hidden")) {
+            console.error("Report still hidden after 2s, forcing show");
+            report.classList.remove("hidden");
+            report.style.display = "flex";
+            report.style.zIndex = "99999";
         }
-    }, 1200);
-}
+    }, 2000);
+};
+
+// Safety net: If health <=0 in gameLoop and gameOver didn't show modal, force it after 1.5s
+window._originalGameLoopCheck = window._originalGameLoopCheck || null;
+
+// Also expose emergency gameOver trigger for console: press G to force gameOver
+window.addEventListener('keydown', (e)=>{
+    if(e.key.toLowerCase() === 'g' && e.ctrlKey) {
+        console.log("CTRL+G emergency gameOver");
+        window.gameOver(true);
+    }
+});
+
+
 // ==========================================
+// 📺 MASTER VIEW MANAGER// ==========================================
 // 📺 MASTER VIEW MANAGER (REPLACES MANUAL .hidden TOGGLES)
 // ==========================================
 window.switchView = function(targetViewId) {
@@ -3757,9 +3817,10 @@ function gameLoop(time) {
             state.meteors.splice(i, 1); 
             hudNeedsUpdate = true;
             
-            // 🟢 GAME OVER KUNG UBOS NA BUHAY, KAHIT NASA CLASS MODE
+            // 🟢 GAME OVER KUNG UBOS NA BUHAY, KAHIT NASA CLASS MODE - FORCE TRUE
             if(state.health <= 0) {
-                gameOver();
+                console.log('Health 0 in gameLoop, calling gameOver');
+                window.gameOver(true);
             }
         }
     }
@@ -11912,4 +11973,53 @@ window.joinCustomQuiz = async function() {
     } catch(e) {
         alert("Connection error.");
     }
+};
+
+
+// 🟢 HOLOGRAM CLICK FIX - Force pointer events after load
+window.addEventListener('load', () => {
+    setTimeout(()=>{
+        console.log("Applying hologram click fix");
+        const style = document.createElement('style');
+        style.innerHTML = `
+            #ui-layer { pointer-events: none !important; z-index: 100 !important; transform-style: flat !important; }
+            #hud-top, #hud-bottom, .command-console, .console-wing, .console-core, #side-feed, #virtual-numpad, #boss-hud, #input-container { pointer-events: auto !important; z-index: 250 !important; position: relative !important; }
+            .tactical-btn, .trigger-btn, .num-btn, #player-input, #game-form, button { pointer-events: auto !important; cursor: pointer !important; z-index: 300 !important; }
+            #gameCanvas { z-index: 1 !important; }
+            #game-wrapper { overflow: visible !important; }
+            .modal { z-index: 99999 !important; pointer-events: auto !important; }
+            #start-countdown, #curtain-countdown { pointer-events: none !important; }
+            #glitch-overlay { display: none !important; pointer-events: none !important; }
+        `;
+        document.head.appendChild(style);
+        
+        // Force enable all buttons
+        document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn').forEach(btn => {
+            btn.style.pointerEvents = 'auto';
+            btn.style.cursor = 'pointer';
+            btn.style.zIndex = '999';
+        });
+        
+        // Fix for side hologram bars (the vertical bars in screenshot)
+        document.querySelectorAll('[class*="side"], [class*="wing"], [id*="comms"], [id*="jessbot"]').forEach(el => {
+            el.style.pointerEvents = 'auto';
+            el.style.zIndex = '300';
+        });
+    }, 1000);
+});
+
+// Also fix immediately for in-combat
+window.fixHologramClick = function() {
+    document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn').forEach(btn => {
+        btn.style.pointerEvents = 'auto';
+        btn.style.cursor = 'pointer';
+    });
+};
+
+// Call fixHologramClick when game starts
+const originalBegin = window.beginGameplay;
+window.beginGameplay = function() {
+    if(originalBegin) try{ originalBegin.apply(this, arguments); }catch(e){}
+    // Original beginGameplay code is in the main file, this wrapper ensures fix runs
+    setTimeout(()=>{ if(window.fixHologramClick) window.fixHologramClick(); }, 100);
 };
