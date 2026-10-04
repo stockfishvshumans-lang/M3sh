@@ -1,4 +1,14 @@
 
+// FIX: Campaign map safety
+window.openCampaignMap = window.openCampaignMap || function() {
+    try {
+        document.getElementById("start-modal")?.classList.add("hidden");
+        document.getElementById("campaign-modal")?.classList.remove("hidden");
+        if(window.renderCampaignMap) window.renderCampaignMap();
+    } catch(e){ console.error(e); alert("Campaign loading..."); }
+};
+
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, setDoc, getDoc, onSnapshot, updateDoc, where, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
@@ -1757,9 +1767,10 @@ function updateSideLeaderboard(list) {
     }
 }
 
-window.toggleMute = function() { let m = window.Sound.toggle(); document.getElementById("mute-btn").innerText = m ? "🔇" : "🔊"; };
-window.togglePause = function() { 
-    // 🚨 SECURITY CHECK: Kung naka-freeze ng Teacher, bawal mag-resume!
+window.toggleMute = function() { console.log('Mute clicked'); try{ let m = window.Sound.toggle(); document.getElementById("mute-btn").innerText = m ? "🔇" : "🔊"; };
+window.togglePause = function() { 
+    console.log('Pause clicked, isPlaying:', state.isPlaying, 'isPaused:', state.isPaused);
+    // 🚨 SECURITY CHECK: Kung naka-freeze ng Teacher, bawal mag-resume!
     if (state.isGlobalFreeze) {
         if(window.Sound) window.Sound.error();
         // Force show pause modal ulit kung sinubukan i-close
@@ -2221,6 +2232,31 @@ function enterClassroomLobby(code, roomName) {
 }
 
 // 🟢 HELPER: TOGGLE CYBER CURTAIN
+
+// 🟢 FIX: MISSING monitorClassroom IMPLEMENTATION (Teacher Dashboard live updates)
+window.monitorClassroom = function(roomCode) {
+    console.log("Monitoring classroom:", roomCode);
+    if (typeof dashboardUnsub !== 'undefined' && dashboardUnsub) dashboardUnsub();
+    try {
+        const studentsCol = collection(db, "rooms", roomCode, "students");
+        dashboardUnsub = onSnapshot(studentsCol, (snapshot) => {
+            currentStudentData = [];
+            snapshot.forEach(docSnap => {
+                let data = docSnap.data();
+                data.id = docSnap.id;
+                currentStudentData.push(data);
+            });
+            if(window.updateRosterView) window.updateRosterView();
+            if(window.updateSpyView) window.updateSpyView();
+            if(window.updatePodiumView) window.updatePodiumView();
+            if(window.updateReportView) window.updateReportView();
+        });
+    } catch(e) {
+        console.error("Monitor error:", e);
+    }
+};
+
+
 window.toggleCurtain = function(show, title = "LOADING...", sub = "PLEASE WAIT", showCount = false) {
     const curtain = document.getElementById("class-curtain");
     const titleEl = document.getElementById("curtain-title");
@@ -2341,6 +2377,12 @@ function startGameLogic() {
 }
 
 window.beginGameplay = function() {
+    // FIX: Hide any stuck countdowns from previous round + ensure hologram clickable
+    document.querySelectorAll('.tactical-btn, .trigger-btn').forEach(btn => { btn.style.pointerEvents = 'auto'; btn.style.zIndex = '300'; });
+
+    const sc = document.getElementById('start-countdown'); if(sc) sc.classList.add('hidden');
+    const cc = document.getElementById('curtain-countdown'); if(cc) { /* keep visible only if classroom */ if(state.gameMode !== 'classroom') { document.getElementById('class-curtain')?.classList.add('hidden'); } }
+
     
     document.body.classList.remove('classroom-mode'); 
     document.body.classList.remove('dashboard-active'); 
@@ -3160,7 +3202,11 @@ window.playOutroSequence = function(isWin) {
 };
 
 window.gameOver = function() {
-    if (state.matchConcluded) return; 
+    console.log("GAME OVER TRIGGERED - Mode:", state.gameMode, "Health:", state.health);
+    if (state.matchConcluded) {
+        console.log("Already concluded, skipping");
+        return;
+    }
     state.matchConcluded = true;
 
     document.body.classList.remove('in-combat');
@@ -3172,45 +3218,87 @@ window.gameOver = function() {
     state.isPlaying = false; 
     if(window.inputField) window.inputField.blur();
 
-    // =====================================
-    // ⚔️ VS MODE & PARTY MODE DEFEAT HANDLING
-    // =====================================
+    // Hide stuck countdowns
+    const sc = document.getElementById("start-countdown");
+    if(sc) sc.classList.add("hidden");
+    const curtain = document.getElementById("class-curtain");
+    if(curtain && state.gameMode !== 'classroom') curtain.classList.add("hidden");
+    document.querySelectorAll('.tactical-btn, .trigger-btn').forEach(b=>{ b.style.pointerEvents='auto'; });
+
+    // VS / PARTY
     if (state.gameMode === 'vs' || state.gameMode === 'party') {
         if (socket && currentRoomId) {
             state.health = 0; 
             if (state.gameMode === 'vs') {
-                socket.emit('player_died', { room: currentRoomId });
-                socket.emit('send_vs_state', { 
-                    room: currentRoomId, 
-                    state: { meteors: [], lasers: [], health: 0, score: state.score } 
-                });
+                try {
+                    socket.emit('player_died', { room: currentRoomId });
+                    socket.emit('send_vs_state', { room: currentRoomId, state: { meteors: [], lasers: [], health: 0, score: state.score } });
+                } catch(e){}
             }
         }
-        
         const winModal = document.getElementById("win-modal");
         if(winModal) {
             winModal.classList.remove("hidden");
             const title = winModal.querySelector("h1");
             const sub = winModal.querySelector(".subtitle");
             const content = winModal.querySelector(".modal-content");
-            
             if(title) { title.innerText = "DEFEAT"; title.style.color = "#ff0055"; title.style.textShadow = "0 0 20px #ff0055"; }
             if(sub) sub.innerText = state.gameMode === 'party' ? "SQUAD WIPED OUT" : "SYSTEM CRITICAL";
             if(content) { content.style.borderColor = "#ff0055"; content.style.boxShadow = "0 0 30px #ff0055"; }
-            
-            // 🟢 MULTIPLAYER FIX: Return to Lobby instead of Solo
             const playAgainBtn = winModal.querySelector(".secondary");
             if(playAgainBtn) {
                 playAgainBtn.style.display = "block";
                 playAgainBtn.innerText = "RETURN TO LOBBY";
-                playAgainBtn.onclick = () => window.returnToLobby();
+                playAgainBtn.onclick = () => { try{window.returnToLobby();}catch(e){window.goHome(true);} };
             }
         }
         return; 
     }
+
+    // SOLO / CAMPAIGN / CLASSROOM / QUIZ - ALL MODES
+    if(window.Sound) try{ window.Sound.playTone(100, 'sawtooth', 1.0); }catch(e){}
+
+    setTimeout(() => {
+        // Ensure report modal exists
+        const reportModal = document.getElementById("report-modal");
+        if(!reportModal) {
+            console.error("report-modal missing, fallback to goHome");
+            window.goHome(true);
+            return;
+        }
+        reportModal.classList.remove("hidden");
+        reportModal.style.display = "flex";
+        reportModal.style.zIndex = "99999";
+        reportModal.style.pointerEvents = "auto";
+        
+        const repScore = document.getElementById("rep-score");
+        if(repScore) repScore.innerText = state.score;
+        
+        // Generate analytics safely
+        try { if(typeof window.renderTacticalLog === 'function') window.renderTacticalLog(); } catch(e){ console.warn(e); }
+        try { if(typeof window.generateMissionDebrief === 'function') window.generateMissionDebrief(); } catch(e){ console.warn(e); }
+        try { if(typeof window.generateTacticalReport === 'function') window.generateTacticalReport(); } catch(e){ console.warn(e); }
+        try { if(typeof window.saveMatchRecord === 'function') window.saveMatchRecord(); } catch(e){ console.warn(e); }
+
+        // Classroom special handling
+        if(state.gameMode === 'classroom') {
+            const homeBtn = document.querySelector('#report-modal .text-only');
+            if(homeBtn) homeBtn.style.display = 'none';
+            const retryBtn = document.querySelector('#report-modal .secondary');
+            if(retryBtn) retryBtn.style.display = 'none';
+            // Report progress to teacher
+            try { if(typeof window.reportProgress === 'function') window.reportProgress(true); } catch(e){}
+        }
+        
+        // Campaign: check if should show reward
+        if(state.gameMode === 'campaign' && window.pendingRewardLevel) {
+            setTimeout(() => {
+                const rewardModal = document.getElementById("reward-modal");
+                if(rewardModal) rewardModal.classList.remove("hidden");
+            }, 1000);
+        }
+    }, 1200);
 }
-
-
 // ==========================================
 // 📺 MASTER VIEW MANAGER (REPLACES MANUAL .hidden TOGGLES)
 // ==========================================
@@ -3284,8 +3372,8 @@ window.quitFromPause = function() {
 // Aliasing the global function just in case older code calls it directly
 function gameOver() { window.gameOver(); }      
 
-// Inside function gameOver()
-if(state.gameMode === 'classroom') {
+// Fixed: moved inside gameOver
+// if(state.gameMode === 'classroom') {
     // Hide the "Quit" button so they stay for the next round
     const homeBtn = document.querySelector('#report-modal .text-only');
     if(homeBtn) homeBtn.style.display = 'none';
@@ -3778,7 +3866,7 @@ function gameLoop(time) {
 
 }
 
-window.pressKey = function(key) { if(!state.isPlaying || state.isPaused) return; const input = document.getElementById("player-input"); if(input) { input.value += key; if(window.Sound) window.Sound.click(); } };
+window.pressKey = function(key) { if(!state.isPlaying) return; if(state.isPaused) return; const input = document.getElementById("player-input"); if(input) { input.value += key; if(window.Sound) window.Sound.click(); } };
 window.pressClear = function() { const input = document.getElementById("player-input"); if(input) { input.value = ""; if(window.Sound) window.Sound.error(); } };
 window.pressEnter = function() { const input = document.getElementById("player-input"); if(input && state.isPlaying) { fireLaser(input.value); input.value = ""; } };
 window.addEventListener('load', () => { if(window.innerWidth <= 768) console.log("Mobile Mode Detected"); });
@@ -5361,10 +5449,10 @@ window.fixGameResolution = function() {
     }
     
     // Fix Background Canvas as well
-    let _bgCanvas = document.getElementById("bgCanvas"); 
-    if(_bgCanvas) { 
-        _bgCanvas.width = window.innerWidth; 
-        _bgCanvas.height = window.innerHeight; 
+    const bgCanvas = document.getElementById("bgCanvas"); 
+    if(bgCanvas) { 
+        bgCanvas.width = window.innerWidth; 
+        bgCanvas.height = window.innerHeight; 
     }
 };
 
