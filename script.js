@@ -1,21 +1,11 @@
 
-// FIX: Campaign map safety
-window.openCampaignMap = window.openCampaignMap || function() {
-    try {
-        document.getElementById("start-modal")?.classList.add("hidden");
-        document.getElementById("campaign-modal")?.classList.remove("hidden");
-        if(window.renderCampaignMap) window.renderCampaignMap();
-    } catch(e){ console.error(e); alert("Campaign loading..."); }
-};
-
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, setDoc, getDoc, onSnapshot, updateDoc, where, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
 // Modular Injections
-// audio classic
-// tactical classic
+import './audio.js';
+import './tactical-solver.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBT8uh1vno4uoK_F77zMS7K8x223ioH-wk",
@@ -166,15 +156,7 @@ let autoStartTimer = null; 
 let isAutoStarting = false;
 let intermissionSeconds = 10;
 // ✅ NEW: Variable to store the saved session without acting on it yet
-let pendingSessionData = null;
-
-// EARLY GUARDS FOR GITHUB PAGES - prevents crash
-window.bgCanvas = window.bgCanvas || document.getElementById("bgCanvas");
-window.bgCtx = window.bgCtx || (window.bgCanvas ? window.bgCanvas.getContext("2d") : null);
-if (typeof window.getCurrentPet !== 'function') {
-    window.getCurrentPet = function() { return null; };
-}
- 
+let pendingSessionData = null; 
 
 // --- 💾 SESSION & HEARTBEAT MANAGERS ---
 function saveSession(role, room, name, docId) {
@@ -437,23 +419,23 @@ window.resumeClassSession = function() {
 // --- 3. ASSET MANAGER (Visuals) ---
 const assets = {
     ships: {
-        'turret_def': { src: 'assets/ship_default.png', img: new Image() },
-        'turret_gold': { src: 'assets/ship_gold.png', img: new Image() },
-        'turret_cyber': { src: 'assets/ship_cyber.png', img: new Image() },
-        'turret_tank': { src: 'assets/ship_tank.png', img: new Image() }
+        'turret_def': { src: 'ship_default.png', img: new Image() },
+        'turret_gold': { src: 'ship_gold.png', img: new Image() },
+        'turret_cyber': { src: 'ship_cyber.png', img: new Image() },
+        'turret_tank': { src: 'ship_tank.png', img: new Image() }
     },
     enemies: {
-        'enemy_def': { src: 'assets/enemy_default.png', img: new Image() },
-        'enemy_alien': { src: 'assets/enemy_alien.png', img: new Image() },
-        'enemy_glitch': { src: 'assets/enemy_glitch.png', img: new Image() }
+        'enemy_def': { src: 'enemy_default.png', img: new Image() },
+        'enemy_alien': { src: 'enemy_alien.png', img: new Image() },
+        'enemy_glitch': { src: 'enemy_glitch.png', img: new Image() }
     },
     boss: {
-        'boss_def': { src: 'assets/boss_mech.png', img: new Image() },
-        'boss_god': { src: 'assets/boss_god.png', img: new Image() }
+        'boss_def': { src: 'boss_mech.png', img: new Image() },
+        'boss_god': { src: 'boss_god.png', img: new Image() }
     },
     misc: {
         'city': { src: '', img: new Image() },
-        'supply': { src: 'assets/supply_crate.png', img: new Image() }
+        'supply': { src: 'supply_crate.png', img: new Image() }
     }
 };
 
@@ -1767,10 +1749,9 @@ function updateSideLeaderboard(list) {
     }
 }
 
-window.toggleMute = function() { console.log('Mute clicked'); try{ let m = window.Sound.toggle(); document.getElementById("mute-btn").innerText = m ? "🔇" : "🔊"; };
-window.togglePause = function() { 
-    console.log('Pause clicked, isPlaying:', state.isPlaying, 'isPaused:', state.isPaused);
-    // 🚨 SECURITY CHECK: Kung naka-freeze ng Teacher, bawal mag-resume!
+window.toggleMute = function() { let m = window.Sound.toggle(); document.getElementById("mute-btn").innerText = m ? "🔇" : "🔊"; };
+window.togglePause = function() { 
+    // 🚨 SECURITY CHECK: Kung naka-freeze ng Teacher, bawal mag-resume!
     if (state.isGlobalFreeze) {
         if(window.Sound) window.Sound.error();
         // Force show pause modal ulit kung sinubukan i-close
@@ -2232,31 +2213,6 @@ function enterClassroomLobby(code, roomName) {
 }
 
 // 🟢 HELPER: TOGGLE CYBER CURTAIN
-
-// 🟢 FIX: MISSING monitorClassroom IMPLEMENTATION (Teacher Dashboard live updates)
-window.monitorClassroom = function(roomCode) {
-    console.log("Monitoring classroom:", roomCode);
-    if (typeof dashboardUnsub !== 'undefined' && dashboardUnsub) dashboardUnsub();
-    try {
-        const studentsCol = collection(db, "rooms", roomCode, "students");
-        dashboardUnsub = onSnapshot(studentsCol, (snapshot) => {
-            currentStudentData = [];
-            snapshot.forEach(docSnap => {
-                let data = docSnap.data();
-                data.id = docSnap.id;
-                currentStudentData.push(data);
-            });
-            if(window.updateRosterView) window.updateRosterView();
-            if(window.updateSpyView) window.updateSpyView();
-            if(window.updatePodiumView) window.updatePodiumView();
-            if(window.updateReportView) window.updateReportView();
-        });
-    } catch(e) {
-        console.error("Monitor error:", e);
-    }
-};
-
-
 window.toggleCurtain = function(show, title = "LOADING...", sub = "PLEASE WAIT", showCount = false) {
     const curtain = document.getElementById("class-curtain");
     const titleEl = document.getElementById("curtain-title");
@@ -2377,12 +2333,6 @@ function startGameLogic() {
 }
 
 window.beginGameplay = function() {
-    // FIX: Hide any stuck countdowns from previous round + ensure hologram clickable
-    document.querySelectorAll('.tactical-btn, .trigger-btn').forEach(btn => { btn.style.pointerEvents = 'auto'; btn.style.zIndex = '300'; });
-
-    const sc = document.getElementById('start-countdown'); if(sc) sc.classList.add('hidden');
-    const cc = document.getElementById('curtain-countdown'); if(cc) { /* keep visible only if classroom */ if(state.gameMode !== 'classroom') { document.getElementById('class-curtain')?.classList.add('hidden'); } }
-
     
     document.body.classList.remove('classroom-mode'); 
     document.body.classList.remove('dashboard-active'); 
@@ -2841,7 +2791,7 @@ function handleMiss(val, meteorObj = null) {
     if(window.Sound) window.Sound.error(); 
     state.health -= 10; 
     updateHUD(); 
-    if (state.health <= 0) { console.log('Health 0 in handleMiss'); window.gameOver(true); }
+    if (state.health <= 0) gameOver();
 }
 
 function handleBossHit(m, idx) {
@@ -3201,165 +3151,86 @@ window.playOutroSequence = function(isWin) {
     }, 3000); // 3 Seconds Delay
 };
 
-window.gameOver = function(force) {
-    console.log("💀 GAME OVER TRIGGERED - Mode:", state.gameMode, "Health:", state.health, "Force:", force, "matchConcluded:", state.matchConcluded);
-    
-    // If already concluded and not forced, allow but still try to show report if report is hidden
-    if (state.matchConcluded && !force) {
-        console.log("Already concluded, checking if report is visible...");
-        const report = document.getElementById("report-modal");
-        const win = document.getElementById("win-modal");
-        if(report && !report.classList.contains("hidden")) {
-            console.log("Report already visible, skipping");
-            return;
-        }
-        if(win && !win.classList.contains("hidden")) {
-            console.log("Win modal already visible, skipping");
-            return;
-        }
-        // If no modal visible, force continue to show game over
-        console.log("No modal visible despite matchConcluded, forcing game over UI");
-    }
-    
+window.gameOver = function() {
+    if (state.matchConcluded) return; 
     state.matchConcluded = true;
-    state.isPlaying = false;
-    state.isPaused = false;
 
     document.body.classList.remove('in-combat');
     
-    // Kill all timers
-    try { if (typeof scoreInterval !== 'undefined' && scoreInterval) clearInterval(scoreInterval); } catch(e){}
-    try { if (state.gameTimer) clearInterval(state.gameTimer); } catch(e){}
-    try { if (state.spawnTimer) state.spawnTimer = 0; } catch(e){}
-    try { if(window.Sound) window.Sound.stopBGM(); } catch(e){}
-    
-    if(window.inputField) try{ window.inputField.blur(); }catch(e){}
+    if (typeof scoreInterval !== 'undefined' && scoreInterval) clearInterval(scoreInterval);
+    if (state.gameTimer) clearInterval(state.gameTimer);
+    if (window.Sound) window.Sound.stopBGM();
 
-    // CRITICAL: Hide ALL countdowns and blockers that cause freeze with "1"
-    try {
-        document.getElementById("start-countdown")?.classList.add("hidden");
-        document.getElementById("class-curtain")?.classList.add("hidden");
-        document.getElementById("curtain-countdown")?.classList.add("hidden");
-        // Hide any other countdown
-        document.querySelectorAll('[id*="countdown"]').forEach(el => {
-            el.classList.add("hidden");
-            el.style.display = "none";
-        });
-    } catch(e){ console.warn(e); }
+    state.isPlaying = false; 
+    if(window.inputField) window.inputField.blur();
 
-    // Make hologram buttons clickable again after death
-    try {
-        document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn, #hud-bottom, .command-console, .console-wing').forEach(el => {
-            el.style.pointerEvents = 'auto';
-            el.style.zIndex = '999';
-        });
-    } catch(e){}
-
-    // VS / PARTY DEFEAT
+    // =====================================
+    // ⚔️ VS MODE & PARTY MODE DEFEAT HANDLING
+    // =====================================
     if (state.gameMode === 'vs' || state.gameMode === 'party') {
         if (socket && currentRoomId) {
-            try {
-                state.health = 0; 
-                if (state.gameMode === 'vs') {
-                    socket.emit('player_died', { room: currentRoomId });
-                    socket.emit('send_vs_state', { room: currentRoomId, state: { meteors: [], lasers: [], health: 0, score: state.score } });
-                }
-            } catch(e){}
+            state.health = 0; 
+            if (state.gameMode === 'vs') {
+                socket.emit('player_died', { room: currentRoomId });
+                socket.emit('send_vs_state', { 
+                    room: currentRoomId, 
+                    state: { meteors: [], lasers: [], health: 0, score: state.score } 
+                });
+            }
         }
+        
         const winModal = document.getElementById("win-modal");
         if(winModal) {
             winModal.classList.remove("hidden");
-            winModal.style.display = "flex";
-            winModal.style.zIndex = "99999";
-            winModal.style.pointerEvents = "auto";
             const title = winModal.querySelector("h1");
             const sub = winModal.querySelector(".subtitle");
             const content = winModal.querySelector(".modal-content");
+            
             if(title) { title.innerText = "DEFEAT"; title.style.color = "#ff0055"; title.style.textShadow = "0 0 20px #ff0055"; }
             if(sub) sub.innerText = state.gameMode === 'party' ? "SQUAD WIPED OUT" : "SYSTEM CRITICAL";
             if(content) { content.style.borderColor = "#ff0055"; content.style.boxShadow = "0 0 30px #ff0055"; }
-            const scoreEl = document.getElementById("win-score");
-            if(scoreEl) scoreEl.innerText = state.score;
+            
             const playAgainBtn = winModal.querySelector(".secondary");
             if(playAgainBtn) {
                 playAgainBtn.style.display = "block";
-                playAgainBtn.innerText = "RETURN TO BASE";
-                playAgainBtn.onclick = () => { try{window.returnToLobby();}catch(e){window.goHome(true);} };
+                playAgainBtn.innerText = "RETURN TO LOBBY";
+                playAgainBtn.onclick = () => window.returnToLobby();
             }
         }
         return; 
     }
 
-    // SOLO / CAMPAIGN / CLASSROOM / QUIZ / ANY OTHER MODE
-    console.log("Showing debrief for", state.gameMode);
+    // =====================================
+    // FIX: SOLO / CAMPAIGN / CLASSROOM / QUIZ (Was missing - caused freeze)
+    // =====================================
+    try { document.getElementById("start-countdown")?.classList.add("hidden"); } catch(e){}
+    try { document.getElementById("class-curtain")?.classList.add("hidden"); } catch(e){}
     try { if(window.Sound) window.Sound.playTone(100, 'sawtooth', 1.0); } catch(e){}
 
-    // Immediate show + delayed safety show
-    const showReport = () => {
+    setTimeout(() => {
         const reportModal = document.getElementById("report-modal");
-        if(!reportModal) {
-            console.error("report-modal missing, fallback to home");
-            setTimeout(()=>window.goHome(true), 500);
-            return;
-        }
-        console.log("Showing report-modal");
+        if(!reportModal) return;
         reportModal.classList.remove("hidden");
         reportModal.style.display = "flex";
         reportModal.style.zIndex = "99999";
-        reportModal.style.pointerEvents = "auto";
-        reportModal.style.opacity = "1";
-        reportModal.style.visibility = "visible";
-        
         const repScore = document.getElementById("rep-score");
         if(repScore) repScore.innerText = state.score;
-        
-        // Generate analytics with safety
-        setTimeout(()=>{
-            try { if(typeof window.renderTacticalLog === 'function') window.renderTacticalLog(); } catch(e){ console.warn("renderTacticalLog", e); }
-            try { if(typeof window.generateMissionDebrief === 'function') window.generateMissionDebrief(); } catch(e){ console.warn("generateMissionDebrief", e); }
-            try { if(typeof window.generateTacticalReport === 'function') window.generateTacticalReport(); } catch(e){ console.warn("generateTacticalReport", e); }
-            try { if(typeof window.saveMatchRecord === 'function') window.saveMatchRecord(); } catch(e){ console.warn("saveMatchRecord", e); }
-        }, 100);
-
+        try { if(window.renderTacticalLog) window.renderTacticalLog(); } catch(e){}
+        try { if(window.generateMissionDebrief) window.generateMissionDebrief(); } catch(e){}
+        try { if(window.generateTacticalReport) window.generateTacticalReport(); } catch(e){}
+        try { if(window.saveMatchRecord) window.saveMatchRecord(); } catch(e){}
         if(state.gameMode === 'classroom') {
-            try { 
-                document.querySelector('#report-modal .text-only')?.style.setProperty('display','none');
-                document.querySelector('#report-modal .secondary')?.style.setProperty('display','none');
-                if(typeof window.reportProgress === 'function') window.reportProgress(true); 
-            } catch(e){}
+            const homeBtn = document.querySelector('#report-modal .text-only');
+            if(homeBtn) homeBtn.style.display = 'none';
+            const retryBtn = document.querySelector('#report-modal .secondary');
+            if(retryBtn) retryBtn.style.display = 'none';
         }
-    };
+    }, 800);
+}
 
-    // Show immediately and also after 1s as backup
-    showReport();
-    setTimeout(showReport, 800);
-    
-    // Emergency fallback: if still not visible after 2s, force reload to home
-    setTimeout(()=>{
-        const report = document.getElementById("report-modal");
-        if(report && report.classList.contains("hidden")) {
-            console.error("Report still hidden after 2s, forcing show");
-            report.classList.remove("hidden");
-            report.style.display = "flex";
-            report.style.zIndex = "99999";
-        }
-    }, 2000);
-};
-
-// Safety net: If health <=0 in gameLoop and gameOver didn't show modal, force it after 1.5s
-window._originalGameLoopCheck = window._originalGameLoopCheck || null;
-
-// Also expose emergency gameOver trigger for console: press G to force gameOver
-window.addEventListener('keydown', (e)=>{
-    if(e.key.toLowerCase() === 'g' && e.ctrlKey) {
-        console.log("CTRL+G emergency gameOver");
-        window.gameOver(true);
-    }
-});
 
 
 // ==========================================
-// 📺 MASTER VIEW MANAGER// ==========================================
 // 📺 MASTER VIEW MANAGER (REPLACES MANUAL .hidden TOGGLES)
 // ==========================================
 window.switchView = function(targetViewId) {
@@ -3432,7 +3303,7 @@ window.quitFromPause = function() {
 // Aliasing the global function just in case older code calls it directly
 function gameOver() { window.gameOver(); }      
 
-// Fixed: moved inside gameOver
+// Note: Moved inside gameOver
 // if(state.gameMode === 'classroom') {
     // Hide the "Quit" button so they stay for the next round
     const homeBtn = document.querySelector('#report-modal .text-only');
@@ -3817,10 +3688,9 @@ function gameLoop(time) {
             state.meteors.splice(i, 1); 
             hudNeedsUpdate = true;
             
-            // 🟢 GAME OVER KUNG UBOS NA BUHAY, KAHIT NASA CLASS MODE - FORCE TRUE
+            // 🟢 GAME OVER KUNG UBOS NA BUHAY, KAHIT NASA CLASS MODE
             if(state.health <= 0) {
-                console.log('Health 0 in gameLoop, calling gameOver');
-                window.gameOver(true);
+                gameOver();
             }
         }
     }
@@ -3927,7 +3797,7 @@ function gameLoop(time) {
 
 }
 
-window.pressKey = function(key) { if(!state.isPlaying) return; if(state.isPaused) return; const input = document.getElementById("player-input"); if(input) { input.value += key; if(window.Sound) window.Sound.click(); } };
+window.pressKey = function(key) { if(!state.isPlaying || state.isPaused) return; const input = document.getElementById("player-input"); if(input) { input.value += key; if(window.Sound) window.Sound.click(); } };
 window.pressClear = function() { const input = document.getElementById("player-input"); if(input) { input.value = ""; if(window.Sound) window.Sound.error(); } };
 window.pressEnter = function() { const input = document.getElementById("player-input"); if(input && state.isPlaying) { fireLaser(input.value); input.value = ""; } };
 window.addEventListener('load', () => { if(window.innerWidth <= 768) console.log("Mobile Mode Detected"); });
@@ -4003,7 +3873,7 @@ window.handleCombo = function(isHit, x, y) {
 
 
 let rainDrops = [];
-window.initRain = function() { if(!bgCanvas) bgCanvas = document.getElementById("bgCanvas"); if(!bgCanvas) return; if(!bgCtx) bgCtx = bgCanvas.getContext("2d"); bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; const columns = bgCanvas.width / 20; for(let i=0; i<columns; i++) rainDrops[i] = 1; };
+window.initRain = function() { if(!bgCanvas) return; bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; const columns = bgCanvas.width / 20; for(let i=0; i<columns; i++) rainDrops[i] = 1; };
 window.drawRain = function() { if(!bgCtx) return; bgCtx.fillStyle = "rgba(2, 2, 5, 0.1)"; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.fillStyle = "#00f3ff"; bgCtx.font = "15px 'Orbitron'"; for(let i=0; i<rainDrops.length; i++) { const text = String.fromCharCode(0x30A0 + Math.random() * 96); bgCtx.fillText(text, i*20, rainDrops[i]*20); if(rainDrops[i]*20 > bgCanvas.height && Math.random() > 0.975) rainDrops[i] = 0; rainDrops[i]++; } };
 window.triggerGlitch = function(duration = 200) { const overlay = document.getElementById("glitch-overlay"); if(overlay) { overlay.classList.remove("hidden"); if(window.Sound) window.Sound.playTone(Math.random()*500+100, 'sawtooth', 0.1); setTimeout(() => { overlay.classList.add("hidden"); }, duration); } };
 window.addEventListener('resize', () => { if(bgCanvas) { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; } });
@@ -6792,22 +6662,22 @@ window.generateMissionDebrief = function() {
 // 1. DATA CATALOG
 const shopCatalog = {
     ships: [
-        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'assets/ship_default.png', desc: 'Reliable. Standard.' },
-        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'assets/ship_gold.png', desc: 'Prestige Class.' },
-        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'assets/ship_cyber.png', desc: 'Neon Aero-dynamics.' },
-        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'assets/ship_tank.png', desc: 'Built like a tank.' },
+        { id: 'turret_def', subtype: 'turret', name: 'Standard Issue', price: 0, img: 'ship_default.png', desc: 'Reliable. Standard.' },
+        { id: 'turret_gold', subtype: 'turret', name: 'Golden Falcon', price: 5000, img: 'ship_gold.png', desc: 'Prestige Class.' },
+        { id: 'turret_cyber', subtype: 'turret', name: 'Cyber Wing', price: 2500, img: 'ship_cyber.png', desc: 'Neon Aero-dynamics.' },
+        { id: 'turret_tank', subtype: 'turret', name: 'Heavy Mecha', price: 8000, img: 'ship_tank.png', desc: 'Built like a tank.' },
         
-        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'assets/enemy_default.png', desc: 'Standard Threat.' },
-        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'assets/enemy_alien.png', desc: 'Bio-organic Hull.' },
-        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'assets/enemy_glitch.png', desc: 'Corrupted Data.' },
+        { id: 'enemy_def', subtype: 'enemy', name: 'Asteroid', price: 0, img: 'enemy_default.png', desc: 'Standard Threat.' },
+        { id: 'enemy_alien', subtype: 'enemy', name: 'Xenomorph', price: 1500, img: 'enemy_alien.png', desc: 'Bio-organic Hull.' },
+        { id: 'enemy_glitch', subtype: 'enemy', name: 'System Glitch', price: 3000, img: 'enemy_glitch.png', desc: 'Corrupted Data.' },
 
-        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'assets/boss_mech.png', desc: ' The Original.' },
-        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'assets/boss_god.png', desc: 'Eldritch Nightmare.' }
+        { id: 'boss_def', subtype: 'boss', name: 'Omega Core', price: 0, img: 'boss_mech.png', desc: ' The Original.' },
+        { id: 'boss_god', subtype: 'boss', name: 'Cosmic Horror', price: 10000, img: 'boss_god.png', desc: 'Eldritch Nightmare.' }
     ],
     upgrades: [
-        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'assets/supply_crate.png' },
-        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'assets/supply_crate.png' },
-        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'assets/supply_crate.png' }
+        { id: 'upgrade_coin', name: 'Crypto Miner', basePrice: 500, maxLevel: 5, desc: '+1 Coin per kill/level', img: 'supply_crate.png' },
+        { id: 'upgrade_score', name: 'Data Processor', basePrice: 800, maxLevel: 5, desc: '+5% Score/level', img: 'supply_crate.png' },
+        { id: 'upgrade_health', name: 'Hull Reinforcement', basePrice: 1000, maxLevel: 10, desc: '+10 Max HP/level', img: 'supply_crate.png' }
     ],
     fx: [
         { id: 'fx_blue', name: 'System Default', price: 0, color: '#00e5ff', aura: 'none', desc: 'Standard Ion Beam.' },
@@ -7082,7 +6952,7 @@ window.renderShopGrid = function() {
 
             cardHTML = `
                 <div class="shop-item">
-                    <img src="${item.img}" onerror="this.src='assets/supply_crate.png'">
+                    <img src="${item.img}" onerror="this.src='supply_crate.png'">
                     <h4>${item.name}</h4>
                     <div class="level-text"><span>Lvl ${currentLvl}</span><span>Max ${item.maxLevel}</span></div>
                     <div class="upgrade-track"><div class="upgrade-fill" style="width: ${progressPercent}%"></div></div>
@@ -7138,7 +7008,7 @@ window.renderShopGrid = function() {
 
             let visualPreview = (currentShopTab === 'fx') 
                 ? `<div class="fx-preview" style="background:${item.color}; box-shadow: 0 0 15px ${item.color}; border: 2px solid white;"></div>`
-                : `<img src="${item.img}" onerror="this.src='assets/ship_default.png'">`;
+                : `<img src="${item.img}" onerror="this.src='ship_default.png'">`;
 
             cardHTML = `
                 <div class="shop-item ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}">
@@ -9866,7 +9736,7 @@ const rtcConfig = {
 
 
 // 2. SOCKET LISTENERS FOR VOICE CALL (Prevent Duplicate Listeners)
-if (socket && typeof socket.off === 'function' && !socket._fake) {
+if (socket) {
     socket.off('incoming_voice_call');
     socket.off('call_accepted');
     socket.off('call_rejected');
@@ -10100,9 +9970,9 @@ window.closeRewardModal = function() {
 
 // 🟢 ADD SECRET SKINS TO SHOP CATALOG (So it renders in the Armory when they check)
 // Hanapin ang 'shopCatalog' object mo sa script.js at idagdag ang mga ito sa 'ships' at 'fx':
-shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
 shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
 
 // ==========================================
@@ -10482,9 +10352,9 @@ window.closeRewardModal = function() {
 // 6. INJECT SECRET SKINS TO SHOP CATALOG (IF NOT YET ADDED)
 if (typeof shopCatalog !== 'undefined') {
     if (!shopCatalog.ships.some(s => s.id === 'turret_phantom')) {
-        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
-        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'assets/ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_phantom', subtype: 'turret', name: 'Phantom', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 30 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_aegis', subtype: 'turret', name: 'Aegis', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 50 Reward.' });
+        shopCatalog.ships.push({ id: 'turret_god', subtype: 'turret', name: 'N.E.X.U.S. Core', price: 'LOCKED', img: 'ship_default.png', desc: 'Campaign Lvl 100 Reward.' });
         shopCatalog.fx.push({ id: 'fx_void', name: 'Dark Matter', price: 'LOCKED', color: '#b000ff', aura: 'void', desc: 'Campaign Lvl 70 Reward.' });
     }
 }
@@ -10912,8 +10782,8 @@ window.petAutoFire = function() {
 // ==========================================
 // 🌌 THE N.E.X.U.S. CORE MATRIX (AAA BACKGROUND)
 // ==========================================
-var bgCanvas = document.getElementById("bgCanvas");
-var bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
+const bgCanvas = document.getElementById("bgCanvas");
+const bgCtx = bgCanvas ? bgCanvas.getContext("2d") : null;
 
 let nexusNodes = [];
 let mouse = { x: -1000, y: -1000, radius: 200 };
@@ -11973,53 +11843,4 @@ window.joinCustomQuiz = async function() {
     } catch(e) {
         alert("Connection error.");
     }
-};
-
-
-// 🟢 HOLOGRAM CLICK FIX - Force pointer events after load
-window.addEventListener('load', () => {
-    setTimeout(()=>{
-        console.log("Applying hologram click fix");
-        const style = document.createElement('style');
-        style.innerHTML = `
-            #ui-layer { pointer-events: none !important; z-index: 100 !important; transform-style: flat !important; }
-            #hud-top, #hud-bottom, .command-console, .console-wing, .console-core, #side-feed, #virtual-numpad, #boss-hud, #input-container { pointer-events: auto !important; z-index: 250 !important; position: relative !important; }
-            .tactical-btn, .trigger-btn, .num-btn, #player-input, #game-form, button { pointer-events: auto !important; cursor: pointer !important; z-index: 300 !important; }
-            #gameCanvas { z-index: 1 !important; }
-            #game-wrapper { overflow: visible !important; }
-            .modal { z-index: 99999 !important; pointer-events: auto !important; }
-            #start-countdown, #curtain-countdown { pointer-events: none !important; }
-            #glitch-overlay { display: none !important; pointer-events: none !important; }
-        `;
-        document.head.appendChild(style);
-        
-        // Force enable all buttons
-        document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn').forEach(btn => {
-            btn.style.pointerEvents = 'auto';
-            btn.style.cursor = 'pointer';
-            btn.style.zIndex = '999';
-        });
-        
-        // Fix for side hologram bars (the vertical bars in screenshot)
-        document.querySelectorAll('[class*="side"], [class*="wing"], [id*="comms"], [id*="jessbot"]').forEach(el => {
-            el.style.pointerEvents = 'auto';
-            el.style.zIndex = '300';
-        });
-    }, 1000);
-});
-
-// Also fix immediately for in-combat
-window.fixHologramClick = function() {
-    document.querySelectorAll('.tactical-btn, .trigger-btn, .num-btn').forEach(btn => {
-        btn.style.pointerEvents = 'auto';
-        btn.style.cursor = 'pointer';
-    });
-};
-
-// Call fixHologramClick when game starts
-const originalBegin = window.beginGameplay;
-window.beginGameplay = function() {
-    if(originalBegin) try{ originalBegin.apply(this, arguments); }catch(e){}
-    // Original beginGameplay code is in the main file, this wrapper ensures fix runs
-    setTimeout(()=>{ if(window.fixHologramClick) window.fixHologramClick(); }, 100);
 };

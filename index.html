@@ -3,6 +3,7 @@
     <html lang="en">
 
     <head>
+    <link rel="icon" href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=">
 
         <meta charset="UTF-8">
 
@@ -28,9 +29,16 @@
 
         <link rel="stylesheet" href="style.css">
 
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+    
+<style>
+/* FIX: Hologram buttons clickable - minimal override, does not delete original */
+#ui-layer { pointer-events: none !important; z-index: 50 !important; }
+#hud-bottom, .command-console, .console-wing, .console-core, #side-feed, #virtual-numpad, #boss-hud { pointer-events: auto !important; z-index: 60 !important; position: relative !important; }
+.tactical-btn, .trigger-btn, .num-btn { pointer-events: auto !important; cursor: pointer !important; z-index: 70 !important; }
+#gameCanvas { z-index: 1 !important; }
+#start-countdown.hidden { display: none !important; }
+</style>
+
 </head>
 
     <body>
